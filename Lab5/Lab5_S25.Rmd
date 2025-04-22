@@ -1,0 +1,122 @@
+---
+title: "Lab 5"
+output:
+  word_document:
+    fig_height: 5
+    fig_width: 8
+date: ""
+author: "Names"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+options(show.signif.stars = FALSE)
+
+library(ggplot2)
+library(ggthemes)
+library(tidyverse)
+library(car)
+library(effects)
+library(readxl)
+library(mosaic)
+library(catstats2)
+library(ggResidpanel)
+library(easyalluvial)
+library(emmeans)
+library(patchwork)
+library(plotly)
+library(modelsummary)
+library(ggmosaic)
+library(gtsummary)
+theme_set(theme_bw()) #Prevents need for + theme_bw() in ggplots
+```
+
+
+# Rules
+
+In groups of 2 to 4 (self-organized), complete the following.
+
+# Purpose: 
+
+This lab will involve using generative AI to potentially improve the introduction and to develop the SOI that would wrap up the report as well as to more easily generate citations to use in writing reports. 
+
+# Learning Objectives
+
+(1) Verify that all students have the correct version of the R package `ggResidpanel` for use to complete the following homework.
+
+(2) How to use generative AI to edit and improve writing, but also learn to use those suggested edits with caution. 
+
+(3) How to write an SOI for a given study using generative AI by providing aspects of the study and then edit/modify results to match the study design. 
+
+(4) How to use generative AI to aid in developing a references section for a report.
+
+# Task 1:
+
+The following code reads in the data set discussed in the provided "Demonstration Report" and removes observations from the Indus river and makes Figure 1 discussed in the report. 
+
+```{r}
+library(readxl)
+riverdata <- read_excel("Qu_etal_2017.xlsx")
+riverdataR <- riverdata %>% dplyr::filter(River != "Indus") 
+```
+
+
+```{r fig.width = 8, fig.height = 6}
+enhanced_stripchart(pCO2 ~ River, data = riverdataR) + labs(y = "Partial CO2 pressure (\u03BCatm)")
+```
+
+Use the data set to fit the interaction model for the $\mu\{pCO2|River\ast Elevation\}$ (not the transformed response). Make the standard "R" diagnostic plot using `resid_panel` and `resid_interact`. Show the results to an instructor to verify the correct version of the package is being used. Using the interactive display, what is the value of the largest Cook's D for this model. Just report that Cook's D value - no other discussion. 
+
+  * **Largest Cook's D for this model is 1.272.**
+
+```{r}
+lm1 <- lm(pCO2 ~ River * Elevation, data = riverdataR)
+resid_panel(lm1, "R")
+#resid_interact(lm1, "R")
+#resid_calibrate(lm1, plots = c("resid", "ls"), nsim = 4)
+```
+
+
+* Comment out the `resid_interact` line of code to knit the document. **Complete the rest of the assignment via edits to the knitted Word document.**
+
+
+
+# Task 2:
+
+Input the following paragraph from the introduction to the “Demonstration Report” into your selected generative AI with a request to modify/edit/improve some aspect or aspects of the provided writing:
+"Streams play an important role in the emissions of greenhouse gases (GHGs) such as CO2. To better characterize this role, data were collected on three rivers on the Tibetan Plateau: the Yangtze (YZ), the Yarlung-Tsangpo (YT), and the Yellow (YL). Sampling was performed in 2014-2015, collecting partial CO2 pressure (pCO2) at each river site in μatm (Qu et al., 2017) as well as site elevation (in meters) and river name. Since both intra- and inter-river elevations variations may influence atmospheric pressure on dissolved gases, and river characteristics can impact CO2 emissions, we investigated how elevation impacts pCO2 and if those impacts vary across rivers."
+
+* Report the suggested edits to the paragraph. Then discuss each edit - would you accept them or not, do they suggest other edits you might consider? Do the suggestions match the state of (your) knowledge about the field and the study being considered?
+
+* Optional: Subtask: Ask for modified edits based on a persona (something like: revise those suggested edits as if you were a ... working on ...) and/or more detailed prompt (make the writing more ... or condense the writing or ...). Do the suggested edits change? In what way did they change? You can use these modified versions or your original prompt results.
+
+* Optional Subtask: Complete this part of the assignment using different generative AI platforms and compare results. Which platform provided the most useful edits?
+
+# Task 3:
+
+Provide information about the variables and the study design (is there random assignment and, if so, what variables were assigned? and was there random sampling? when and where were the data collected?) and request a sentence that addresses generalizability of the results (can you make inferences to a larger population or not?) and then request a second sentence that addresses whether causal inference is possible in this situation based on the similarly provided context of this study. Make sure you focus on a particular model for the discussion, as the causal aspects might change based on the variables being considered and how they are being used in the model you are focused on.
+
+* Report the suggested generative AI sentences and then edit/modify them to be versions you would want to include at the end of the report in the SOI section. Discuss how you had to edit the results.
+
+# Task 4:
+
+Formatting citations can often be challenging when they come from disparate sources. Extract the noted citation information from various locations in the provided report using citation("Rpackagename") in R (console is fine - no need to go back to the provided Rmd) for obtaining citation information for the R packages used and other sources for other citations. Note that all citations were highlighted in the demonstration report to help you to identify the needed citations. Provide the information to your selected generative AI and use it to make sure the formatting is consistent with a particular citation style and in alphabetical order. 
+
+* Submit your citations/references section for feedback here. Eventually this will be a question on the next HW.
+
+# Task 5:
+
+Reflect on the use of generative AI for each of the three tasks. How well did your chosen generative AI do the requested tasks? Rank your chosen generative AI in its usefulness on the three previous tasks and explain the reason for your ranking. 
+
+# Task 6: 
+
+Moving forward, will you use generative AI for similar tasks in the future? What ways have you or do you expect to use generative AI in your academic career?
+
+
+
+
+
+# Grading Rubric: 
+
+Each task will be assessed on a scale from 0 to 5, with 0 being not attempted, 1 being minimal effort or incomplete reporting of results, 2 being partially incomplete or poor effort, 3 being a moderate effort but notable missing/incorrect on some parts, 4 being good work on some parts but missing/incomplete on others, and 5 being excellent and complete work.

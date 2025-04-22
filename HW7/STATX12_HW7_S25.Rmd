@@ -1,0 +1,170 @@
+---
+title: "HW 7"
+output:
+  word_document:
+    fig_height: 5
+    fig_width: 8
+date: "Due 3/14/2025"
+author: "No name needed"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+options(show.signif.stars = FALSE)
+
+library(ggplot2)
+library(ggthemes)
+library(tidyverse)
+library(car)
+library(effects)
+library(mosaic)
+library(ggmosaic)
+library(remotes) #Needed for next two installs from github:
+
+#Re-comment this after running it once:
+#remotes::install_github("greenwood-stat/ggResidpanel")
+library(ggResidpanel)
+#remotes::install_github("greenwood-stat/catstats2")
+library(catstats2)
+library(gtsummary)
+library(lubridate)
+library(patchwork)
+library(MuMIn)
+library(lmerTest)
+library(cetcolor)
+library(ggrepel)
+library(easyalluvial)
+theme_set(theme_bw()) #Prevents need for + theme_bw() in ggplots
+```
+
+# HW 7 Instructions:
+
+* This is an individual assignment, but you may discuss the work with other students, which must be documented in the last question. The answers should be your own.
+
+Continuing with Fabusova et al. (2024) and the provided data set ("moths.xlsx") to answer the following questions.
+
+* Fabusova M, Gaston KJ, Troscianko J. 2024 Pulsed artificial light at night alters moth flight behaviour. Biol. Lett. 20: 20240403. https://doi.org/10.1098/rsbl.2024.0403
+
+```{r}
+library(readxl)
+moth <- read_excel("moths.xlsx", 
+     sheet = "complete_dataset_MAIN FAMILIES.", 
+    na = "NA")
+
+library(lubridate)
+
+moth <- moth %>% mutate(Date = factor(ymd(Date))) %>% dplyr::select(-Sunset_time)
+
+moth2 <- moth %>% drop_na(Date, ID, Location, Treatment, Treatment_y_n, Colour, Spectra, Moon_Phase, Temp, Wind_speed_ms, Humidity, Common_name, Latin_name, Family, Sub_family, Latency) #Slight change from prior HW to keep more observations!
+
+moth2 <- moth2 %>% mutate(Treatment = fct_recode(factor(Treatment),
+                                                 "Cold Phosphor" = "1",
+                                                 "Warm Phosphor" = "2",
+                                                 "Cold RGB" = "3",
+                                                 "Warm RGB" = "4"), #5 recoding not needed - controls dropped
+                          logLatency = log(Latency),
+                          Colour = factor(Colour),
+                          Spectra = factor(Spectra))
+```
+
+Note: Use `moth2` for the remaining questions.
+
+
+To avoid 2-WAY ANOVA interaction models prior to discussing them fully, we fit the "Treatment" variable as a four level. For now, we will focus just on the randomly assigned predictor part of the model only and compare using the two individual binary variables to using `Treatment` that we used previously. 
+
+1) The linear model with just `Treatment` is provided. Add the coefficients to the estimated model:
+
+* $\hat{\mu}\{logLatency|Treatment\} = 1.8 + 0.65I_{Treatment = WarmPhos} + 0.64I_{Treatment = ColdRGB} + 0.81I_{Treatment = WarmRGB}$
+
+* where $I_{Treatment = WarmPhos}$ is 1 for a Warm Phosphorous observation and 0 otherwise, $I_{Treatment = ColdRGB}$ is 1 for a Cold RGB observation and 0 otherwise, and $I_{Treatment = WarmRGB}$ is 1 for a Warm RGB observation and 0 otherwise.
+
+
+```{r}
+lmTreat <- lm(logLatency ~ Treatment, data = moth2)
+lmTreat %>% tbl_regression(intercept = T)
+```
+
+
+2) Generate estimated means for both the Cold Phosphorous level and the Warm RGB level based on the estimated model you wrote out in question 2. Show your work.
+
+**Estimated mean for Cold Phosphorous is 1.8 log seconds, as cold phosphor is the baseline so it is just the intercept. Estimated mean for warm RGB is 2.61 log seconds. **
+
+```{r}
+coldP <- 1.8 
+coldP  
+warmRGB <- 1.8 + 0.81
+warmRGB
+```
+
+3) Make an interaction plot based on the `Colour` and `Spectra`. No discussion.
+
+```{r}
+moth2 %>% ggintplot(response = 'logLatency', groupvars = c('Colour','Spectra'))
+```
+
+4) Fit a linear model with `Colour`, `Spectra`, and the interaction of those two variables. Write out the estimated model, defining your indicator variables.
+
+* $\hat{\mu}\{logLatency|Colour \ast Spectra\} = 1.8 + 0.65I_{Colour = warm} + 0.64I_{Spectra = RGB} - 0.48I_{colour = warm}I_{Spectra = RGB}$
+
+* where $I_{Colour = Warm}$ is 1 for a Warm observation and 0 otherwise, and $I_{Spectra = RGB}$ is 1 for a RGB observation and 0 otherwise
+
+
+```{r}
+int_model <- lm(logLatency ~ Colour * Spectra, data = moth2)
+int_model %>% tbl_regression(intercept = T)
+```
+
+
+5) Use the interaction model to generate estimated means for both a Cold, Phosphorous level observation and a Warm, RGB observation based on the estimated model you wrote out in question 5. Show your work. 
+
+* Note: These should match prior answers, but the work should be different.
+
+**Estimated mean for Cold Phosphorous is 1.8 log seconds, as cold phosphor is the baseline so it is just the intercept. Estimated mean for warm RGB is 2.61 log seconds, with beta coefficients for both Warm and RGB being added and the interaction term subtracted. (See work below)**
+
+```{r}
+coldP <- 1.8
+coldP  
+warmRGB <- 1.8 + 0.65 + 0.64 - 0.48
+warmRGB
+```
+
+
+6) Generate an F-test for the interaction of `Colour` and `Spectra` from the previous interaction model and report an evidence sentence for the interaction.
+
+**In the interaction model, there is little to no evidence against the null hypothesis of no interaction between Colour and Spectra on logLatency ($F_{1,299} = 2.7012, p-value = 0.1013).**
+
+```{r}
+Anova(int_model)
+```
+
+7) The researchers might have been interested in the interaction between moon phase and the spectra. Explain why it is not possible to estimate and test for an interaction of these two variables using the provided alluvial diagram and possibly other information you can find from the data set.
+
+**Looking at the alluvial diagram, the full moon phase is only associated with the LED spectra level. This restricts moon phase to only the LED level of the spectra. For an interaction you need variation in both variables across ALL levels, and we do not have that. **
+
+
+```{r fig.width = 12, fig.height = 10}
+moth2 %>% dplyr::select(Moon_Phase, Spectra) %>% alluvial_wide(fill_by = "first_variable")
+
+tally(Moon_Phase ~ Spectra, data = moth2)
+```
+
+
+8) Suppose that the researchers had posited that the effects of the spectral type on logLatency might differ based on the family of the moths. Select _ALL_ of the following that are correct based on the `ggintplot` results.
+
+a) For _Crambidae_ and _Erebidae_ families, the estimated mean log-latency is similar, but the difference is a little larger for _Noctuidae_ and the difference is the largest for the _Geometridae_ families. 
+
+**b) The estimated mean log-latency is higher for RGB than for LED in the upper right panel of the plot, but this result should be viewed with caution as there could be an interaction between family and spectra that could make this more complicated.**
+
+**c) The estimated mean log-latency is highest for _Noctuidae_ moths that were exposed to RGB spectra.**
+
+d) Because there is a negative number in the strip for the _Crambidae_ and LED, there must be a calculation error as latency is a time and so can't be negative.
+
+```{r fig.width = 12}
+ggintplot(response = "logLatency", groupvars = c("Family","Spectra"), data = moth2)
+```
+
+
+9) Document any collaborations or pertinent discussions with other students and the resources that I am providing and the _Sleuth_ that you used to complete this assignment *or report that you did not have any*. If you used generative AI, report which question(s) and how/what you asked for.
+
+**NONE**

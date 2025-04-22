@@ -1,0 +1,213 @@
+---
+title: "Lab 1"
+output:
+  word_document:
+    fig_height: 5
+    fig_width: 8
+date: ""
+author: Rowan Edwards, Lois Deschaux, Ceili DeMarais
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+options(show.signif.stars = FALSE)
+
+library(ggplot2)
+library(ggthemes)
+library(tidyverse)
+library(car)
+library(betareg)
+library(remotes) #Needed for next two installs from github:
+#remotes::install_github("greenwood-stat/catstats2")
+library(catstats2)
+#remotes::install_github("greenwood-stat/ggResidpanel")
+library(ggResidpanel)
+library(gtsummary)
+library(broom.helpers)
+theme_set(theme_bw()) #Prevents need for + theme_bw() in ggplots
+```
+
+# Lab 1 Instructions:
+
+Working in a group of 2, 3, or 4 people (randomly assigned in class, singletons allowed on this first lab too if you miss the in-person session), complete the following questions. Turn in a single PDF from your word document for the group _with all group member names on it_ after knitting this document with your answers "in-line" (after the questions). Part of the assignment is to create a document that can successfully knit. You can discuss this lab with people outside of your lab group, but you must document any sources of information outside of the instructors, your group members, and the materials I am providing you (like web resources or other folks that you might ask for help).
+
+Note that you have free access to Adobe Acrobat Pro via MSU at https://www.montana.edu/uit/students/adobe/index.html and will find that useful for merging separate files into a single PDF this semester.
+
+Make sure to run spell-check using the "ABC check" button near the filename or use (i.e., pay attention to) the text underlining suggestions in the document (like for "filename"). The word document will not have spell-check turned on when built from a .Rmd file, so do the checking here.
+
+The initial header contains some packages we will use frequently this semester. In addition to packages from CRAN, we need two special packages available from my github repository. In order to access them, you need to download and load the `remotes` package. Then uncomment the lines that contain `#remotes::install_github("greenwood-stat/ggResidpanel")` and `#remotes::install_github("greenwood-stat/catstats2")`. Do this to download the packages and then re-comment those lines as you will not need to do that again unless you update your version of R or change computers. Do NOT use `install.packages("ggResidpanel")` as this will install a different version. Then you can uncomment the `#library(ggResidpanel)` line for this lab and future uses.
+
+
+## Factors related to intra-tendinous morphology of Achilles tendon in runners
+
+To get a chance to review and practice/learn to use R, we will explore the data set posted to accompany Ho _et al_.'s "Factors related to intra-tendinous morphology of Achilles tendon in runners". Please read the paper prior to January 17 to prepare for our first lab and we will revisit it for many more analyses.
+
+* Ho K-Y, Baquet A, Chang Y-J, Chien L-C, Harty M, Bashford G, et al. (2019) Factors related to intra-tendinous morphology of Achilles tendon in runners. _PLoS ONE_ 14(8): e0221183. https://doi.org/10.1371/journal.pone.0221183
+
+It is available at https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0221183
+
+* You will have time in the lab to work collaboratively to answer the following questions.
+
+## General Questions:
+
+1) What does PSFR stand for? Are higher or lower levels of it "good"?
+
+  * **PSFR stands for peak spatial frequency radius. PSFR was used to detect intra-tendinous morphological change, which was defined by collagen fiber disorganization. A low PSFR was associated with greater collagenous disarray, suggesting degeneration. Thus, higher levels of PSFR are "good".**
+
+
+2) What two predictor variables did they indicate were ["s"-word] related to the PSFR in their univariate models?
+
+  * **Male sex and presence of current Achilles tendon pain were indicated as ["s"-word] related to the PSFR in their univariate models.** 
+
+
+3) Which predictor did they indicate was ["s"-word] related to the PSFR in the "multivariate" model? What was the direction of the result (in other words, which levels/direction was related to "better" and "worse" on the response)?
+
+  * **Their multivariate model indicated that male sex was ["s"-word] associated with a decreased PSFR. Male runners displayed "worse" PSFR levels on average.**
+
+
+## Data Exploration:
+
+The following code will get you started with the data set, including reading it in and wrangling the data set a bit.
+
+* The data set is provided two possible ways. The authors' posted it as an Excel spreadsheet. I also provided the data set in the `catstats2` package under the name `TendonData`.
+
+* The file "Runner Factors related to Intra-tendonious Morphology updated.xlsx" is posted on D2L. Download the .xlsx file and save it into a *new* folder, where you will store the data __and__ today's data analysis .Rmd file. You can choose the folder - maybe make a new one for our suite of the initial 3 to 5 labs that will use this same data set or make a new folder for each lab. Then make sure the `readxl` (for reading in xlsx files) package is installed (use the Packages tab or yellow bar at top of the .Rmd when you save it to tell you about a missing package used in the code below) and load it using `library(readxl)`. 
+
+* The top of the .Rmd file has settings to eliminate reporting of messages and warnings (and significance stars!), but you will see code below to turn those on in certain codechunks options using `message = T` and `warning = T`. Having these off either in the codechunks or in the header above will clean up what appears in the final document but can make it more difficult to see mistakes in code sometimes.
+
+* It is good code writing practice to keep a set of all related data, analysis, plots, documents, etc. in the same or possibly nested folders. When all the pieces are in the same folder, it allows for a clean workflow and working directory. When you are executing an R markdown file, `R` will search for things (such as data) in the __same__ folder as where it is saved. If you do this, you will not need to specify anything other than `read_excel("filename.xlsx")` in the code chunk.
+
+_If_ you are having troubles loading your data into RStudio and you have saved your files in this way, it is possible that `R` is searching in the wrong location and you need to change your working directory.
+
+* The easiest way to do this is,
+
+    - click on the __Session__ drop-down from the top of the screen,
+    - select the __Set Working Directory__ tab,
+    - select __To Source File Location__.
+    - Copy the code into the code chunk before the code to read in the data set.
+
+* After this process `R` will be searching for objects (such as data) in the __same__ folder that the document/script you're working on is saved in.
+
+Now we can read the data set into our R session using `read_excel("file.xlsx")`.
+
+## General information on reading in files in RStudio:
+
+* Note that if you are used to using the "Import Dataset" button in RStudio, you can select whether to use the `read_csv` function from `readr` or `read.csv`; `read_csv` reads the data set in as a `tibble` and will be our most typical format. If you use `read.csv`, it will be read the data in as a `data.frame`. You can use either. The `read_...` functions make fewer assumptions about the variable types than `read.csv` and you will need to transform any categorical variables as factors (using `factor`) - see the `mutate()` part of the code below that is done for you this one time. Text variables are read in as character type variables in the `read_...` functions and it is our task to define them as factors (and to define any numerically coded variables that represent factor levels as factors). There are options to modify (most easily using the "Import Dataset" button) if your missing data are stored as anything other than blank cells or the data are in any other format (SPSS, SAS, or STATA data formats).
+
+* The `readxl` package and its `read_excel` function can read data sets directly from Excel spreadsheets. This allows you to maintain multi-tab excel data sets, read in from the desired page, and even select the rows to read in. The potential for keeping multiple sheets together (especially if the other sheets contain metadata (source of information and variable definitions, for example) or different related data sets) make the choice of Excel files more attractive than they were 10 years ago. But `.csv` files are still considered more stable ways of archiving data for future use, but they only have a single "sheet".
+
+## Another option for accessing the data:
+
+* If you have problems reading in the data set, you can try to load it directly from the `catstats2` package to have it available using `data(TendonData)`. It also has a help file that contains more information about the data set and some possible code. After the first lab, we will switch to using the version of the data set from `catstats2`.
+
+## Data wrangling
+
+* It is a good idea to explore the data set briefly. Explore the results of `View(tendon)`, `head(tendon)`, and `tail(tendon)` by uncommenting each line (you can re-comment them to submit the lab). Or to look more generally using a function like `glimpse` that is already un-commented.
+
+```{r}
+library(readxl)
+ tendon <- read_excel("Runner Factors related to Intra-tendonious Morphology updated .xlsx")
+
+ #If using data(TendonData) from catstats2:
+ #tendon <- TendonData
+
+ #View(tendon)
+ #head(tendon)
+ #tail(tendon)
+
+ glimpse(tendon)
+
+```
+
+* The following code leverages some functions from the `tidyverse` to change names of some unfortunately named variables (`rename`), the `mutate_if(is.character, as.factor)` is a neat bit of code that looks for character variables and turns them into factor variables (here that is only two variables, `SubjectID` and `Side`), and the `mutate` function is used to change three numerically coded factor variables into factors so they will be properly modeled by R and create two new variables related to the location and combinations observed for current and past pain responses. Some of these variables we will explore on later labs.
+
+```{r}
+ library(tidyverse)
+
+ tendon <- tendon %>%
+      dplyr::rename(SubjectID = 'Subject ID',
+             Sex = 'Sex  (M=1)',
+             CurrPain = 'CurrPain (Y=1)',
+             WaisttoHip = 'Waist to Hip',
+             VISAA = 'VISA-A',
+             Neovascularization = 'Neovascularization (Doppler) (Y=1)',
+             HistPain = 'Hx Pain (Y=1)') %>%
+      mutate_if(is.character, as.factor) %>%
+      mutate(CurrPain = factor(CurrPain),
+             Neovascularization = factor(Neovascularization),
+             Sex = factor(Sex),
+             Location = factor(substr(SubjectID, 1, 3)),
+             HistPain = factor(HistPain),
+             PainCombs = factor(str_c(HistPain, CurrPain)))
+  levels(tendon$PainCombs) <- c("NoPain", "PreviousPainOnly", "CurrentPainOnly", "Both")
+```
+
+
+4) They mention using a linear mixed model but their explanation is not completely clear. One assumption of using a regular linear model (our `lm`) is that all the observations taken are independent. Discuss how the data they collected violate the independence assumption if a linear model had been used for modeling PSFR. Just base this on their data collection explanation and who/what they measured and modeled, reviewing the data set help with understanding what they measured on each subject.
+
+  * **There could have been multiple clustering effects in their study design related to multiple samples taken from the same individual, two different locations, sex, age, lifestyle, and other related factors. The use of a regular linear model in this case could result in inaccuracies because of possible correlations within subject measurements. They could instead fit a mixed linear model that would account for these dependencies.**
+
+
+5) The following code provides a plot that can help us to visualize responses and, more importantly, missing data in our data set. Which variables contain missing data and which ones have the most missing observations (you do not need to find the exact numbers)?
+
+  * **Years running, waist to hip ratio, and CSA variables all have missing observations. It seems as though waist to hip and CSA contain the most missing observations.**
+
+```{r}
+library(mi)
+tdf <- missing_data.frame(data.frame(tendon))
+image(tdf)
+table(tdf@patterns)
+```
+
+6) The following code creates two different versions the data set. What happened in creating `tendonna1` and `tendonna2` and what are the sample sizes?
+
+   * **'tendonna1' removed the samples what were missing the observations for CSA, bringing the overall sample size down to 166. 'tendonna2' removed samples with the remaining NA missing observations, leaving a sample size of 164.**
+
+```{r}
+tendonna1 <- tendon %>% drop_na(CSA)
+tendonna2 <- tendon %>% drop_na()
+dim(tendon)
+dim(tendonna1)
+dim(tendonna2)
+tdf1 <- missing_data.frame(data.frame(tendonna1))
+image(tdf1)
+tdf2 <- missing_data.frame(data.frame(tendonna2))
+image(tdf2)
+```
+
+7) We will use `tendonna2` moving forward (the researchers used "complete case" versions of each model so the univariate and "multivariate" model results had differing sample sizes, as we will explore later). Use `ggplot` to make a plot of `PSFR` (y-axis) vs Waist-to-Hip ratio (x-axis, `WaisttoHip`) coloring the points by `Sex` of subjects and adding `lm` and nonparametric smoothing lines (hint: you need to add `geom_point` and two `geom_smooth`'s). Also modify the title of the plot. To help you, the code is started for you:
+
+```{r warning = T}
+library(ggplot2)
+tendonna2 %>% ggplot(mapping = aes(x = WaisttoHip, y = PSFR)) +
+  geom_point(mapping = aes(col = Sex), alpha = 0.5) +
+  geom_smooth(method = "lm") +
+  geom_smooth(col = "red", lty = 2, se = F) +
+  scale_color_manual(values = c("0" = "red", "1" = "blue"),
+                     labels = c("Male", "Female")) +
+  labs(x = "Waist-to-hip ratio (unitless)",
+       y= "Peak Spatial Frequency Radius (per mm)",
+       title = "Plot of PSFR versus waist to hip ratio colored based on sex")
+
+```
+
+
+
+8) I like the general structure of the paper and, after a few emails and them updating the posted data set, we can more or less replicate their results. We'll eventually incorporate the mixed model ideas similar to what they used, but for now use `tendonna2` to fit an `lm` with `PSFR` as the response and `Sex` and `WaisttoHip` as the explanatory variables (no interaction). Report a model `summary()` and also run something like `modelname %>% tbl_regression(intercept = T)` for your model (no discussion, just fit the model and include the output).
+
+```{r}
+model <- lm(PSFR ~ Sex + WaisttoHip, data = tendonna2)
+summary(model)
+model %>% tbl_regression(intercept = T)
+```
+
+
+9) It's useful to record some information about the version of R you are using. When you `Knit` this documentation, it will report on the version of R that you are using. It should say 4.4.2 in your compiled (knitted) word document:
+
+  * R version (short form): `r getRversion()`
+
+  
+10) Document any resources used outside of your fellow group members and course provided resources. If you do not use any, report "NONE" to get credit for this question.
+
+  * NONE

@@ -1,0 +1,153 @@
+---
+title: "Lab 2"
+output:
+  word_document:
+    fig_height: 5
+    fig_width: 8
+date: "1/22/2025"
+author: "Rowan Edwards, Lois Deschaux, Ceili DeMarais"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+options(show.signif.stars = FALSE)
+
+library(ggplot2)
+library(ggthemes)
+library(tidyverse)
+library(car)
+library(effects)
+library(catstats2)
+library(ggResidpanel)
+library(gtsummary)
+library(mosaic)
+theme_set(theme_bw()) #Prevents need for + theme_bw() in ggplots
+```
+
+# Lab 2 Instructions:
+
+Working in a group of 2, 3, or 4 people (singletons allowed if you miss the in-person session and did not find a group), complete the following questions.  Turn in a single word document for the group _with all group member names on it_ after knitting this document with your answers "in-line" (after the questions).
+
+## Factors related to intra-tendinous morphology of Achilles tendon in runners: Part II
+
+
+*-* Ho K-Y, Baquet A, Chang Y-J, Chien L-C, Harty M, Bashford G, et al. (2019) Factors related
+to intra-tendinous morphology of Achilles tendon in runners. _PLoS ONE_ 14(8): e0221183. https://doi.org/10.1371/journal.pone.0221183
+
+The article is available at https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0221183
+
+
+```{r}
+library(tidyverse)
+data(TendonData) #Version of data set from catstats2
+tendon <- TendonData
+
+tendon <- tendon %>% 
+      rename(
+        SubjectID = 'Subject ID', 
+             Sex = 'Sex  (M=1)',
+             CurrPain = 'CurrPain (Y=1)',
+             WaisttoHip = 'Waist to Hip', 
+             VISAA = 'VISA-A',
+             Neovascularization = 'Neovascularization (Doppler) (Y=1)',
+             HistoryPain = 'Hx Pain (Y=1)') %>%
+      mutate_if(is.character, as.factor) %>% 
+      mutate(CurrPain = factor(CurrPain),
+             Neovascularization = factor(Neovascularization),
+             Sex = factor(Sex),
+             HistoryPain = factor(HistoryPain))
+
+tendonna1 <- tendon %>% drop_na(CSA)
+tendonna2 <- tendon %>% drop_na()
+```
+
+For the following questions, use `tendonna2`:
+
+1) The levels for `Sex` are less than ideal (and we stripped off the definition from the variable name - see code above). Uncomment and modify the following code to change the levels to be more explicit in the `Sex` factor variable:
+
+```{r}
+levels(tendonna2$Sex)
+tendonna2 <- tendonna2 %>% mutate(
+  Sex = fct_recode(Sex,
+                  "Female" = "0",
+                   "Male" = "1")
+  )
+
+levels(tendonna2$Sex)
+
+```
+
+
+2) Make a plot of `PSFR` (y-axis) by `Sex` from the `tendonna2` data set using an `enhanced_stripchart` from the `catstats2` package. Since the `enhanced_stripchart` is just a wrapper to a pile of ggplot2 code, you can use some of the modifications for ggplots to make it better. For example, you can modify labels using `+ labs(y = "better y-axis label")`. Improve the y-axis label to include the units the authors mention for PSFR (see their Table 1, for example). I set up a spot in parentheses after the variable name where you can try out TeX code to get the units included. You can leave the title as it is since the function adds a decent one by default.
+
+```{r}
+library(latex2exp)
+enhanced_stripchart(PSFR ~ Sex, data = tendonna2) + labs(y = TeX("$PSFR (mm^{-1})$"))
+
+```
+
+
+3) Generate descriptive statistics of `PSFR` by `Sex` groups using `favstats` from the `mosaic` package. If you can't get `mosaic` to work, you can use `group_by` as shown in the notes to find at least the min, max, and mean for each group.
+
+```{r}
+favstats(PSFR~Sex, data = tendonna2)
+
+```
+
+4) Based on these results, what is the estimated difference in the mean PSFR levels between male and female subjects? Make sure you make it clear which one is larger/smaller in writing a sentence to report this ("_difference_ of ..." is not read by different people the same way).
+
+  * The estimated difference in the mean PSFR levels between Male and Female subjects is $-0.104581mm^{-1}$ (Male - Female). Male subjects had a mean PSFR level that was $0.104581mm^{-1}$ less than females. 
+  
+
+5) Fit an `lm` with `PSFR` and as the response and `Sex` as the predictor. Generate a base R model `summary`, generate a nice table of results using `%>% tbl_regression(intercept = T) %>% add_global_p()`, and make an effects plot using the effects package (so something like `plot(allEffects(modelname))`). In Table 3 in the paper, which level of `Sex` was their reference level? In your model, which one is the reference and how can you tell?
+
+  * In table 3 their reference level is 'female', which is the same in our model. We can see this in the regression table as the female level is blank and the male level has an estimated difference. 
+
+```{r}
+model <- lm(PSFR ~ Sex, data = tendonna2)
+model %>% tbl_regression(intercept = T) %>% add_global_p()
+plot(allEffects(model))
+```
+
+
+6) Write out the estimated model, defining the indicator variable you used.
+
+* $\hat{\mu}\{PSFR|Sex\} = 2 - 0.1I_{Sex=Male}$
+
+    - where $I_{Sex = Male}$ is 1 for a Male observation and 0 otherwise
+
+
+
+7) Replace the "..."s and make choices from the []s in the provided "size" interpretation for the slope coefficient for the `Sex` row in the model summary, finding and reporting a 95% confidence in parentheses as part of that single sentence. Hint: the `confint` function is an easy way to obtain a confidence interval or you can use the output from `tbl_regression`.
+
+* For two otherwise similar subjects but that differ on the sex of the subjects, the estimated mean PSFR of male subjects is $0.01\text{mm}^{-1}$ lower than that of female subjects (95% CI from 0.05 to 0.16).
+
+
+8) Now we want to start to explore their "multivariate" model. It contained Age, Sex, BMI, WaisttoHip, Years running, CurrPain, HistoryPain, VISA-A, CSA, Neovascularization, Knee-to-wall, and Heel raise as predictors (no interactions). Fit this model and make effects plots. Do these plots two ways, one with `plot(allEffects(modelname), grid = T)` and the other that adds partial residuals (we'll discuss these more later) using `plot(allEffects(modelname, residuals = T), grid = T)`.
+
+
+```{r fig.width=12, fig.height=12}
+mlm <- lm(PSFR ~ Age + Sex + BMI + WaisttoHip + YearsRunning + CurrPain + HistoryPain + VISAA + CSA + Neovascularization + KneeWall + HeelRaise, data = tendonna2)
+
+p1 <- plot(allEffects(mlm), grid = T)
+p2 <- plot(allEffects(mlm, residuals = T), grid = T)
+```
+
+9) Then choose one slope coefficient from this model other than `Sex` and report an evidence sentence for it, filling in the needed parts of the provided evidence reporting template.
+
+```{r}
+summary(mlm)
+```
+
+* There is little to no evidence against the null hypothesis of no interaction between Years Running and PSFR ($t_{151} = -0.312$, two-sided p-value = 0.75522), controlling for Age, Sex, BMI, WaisttoHip, CurrPain, HistoryPain, VISA-A, CSA, Neovascularization, Knee-to-wall, and Heel raise, so we conclude that there is not a relationship between PSFR and Years Running and would drop the term from the model.**
+
+
+10) One more check of your version of R. It should say 4.4.2 in your compiled (knitted) word document:
+
+  * R version (short form): `r getRversion()`
+
+11) Document any resources used outside of your fellow group members and course provided resources. If you do not use any, report "NONE" to get credit for this question.
+
+  * NONE
+

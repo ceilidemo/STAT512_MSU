@@ -1,0 +1,263 @@
+---
+title: "HW 9"
+output:
+  word_document:
+    fig_height: 5
+    fig_width: 8
+date: "April 17"
+author: "No name needed"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+options(show.signif.stars = FALSE)
+
+library(ggplot2)
+library(ggthemes)
+library(tidyverse)
+library(car)
+library(effects)
+library(catstats2)
+library(ggResidpanel)
+library(gtsummary)
+library(mosaic)
+library(lmerTest)
+library(nlme)
+library(DiagrammeRsvg)
+library(easyalluvial)
+library(MuMIn)
+theme_set(theme_bw()) #Prevents need for + theme_bw() in ggplots
+```
+
+
+# Rules:
+
+This is an individual assignment, but you are welcome to discuss your answers with other students. Please document any discussions that were impactful on your answers to go with documenting any other outside of class resources you used.
+
+# Part I: Revisiting "Factors related to intra-tendinous morphology of Achilles tendon in runners"
+
+* Ho K-Y, Baquet A, Chang Y-J, Chien L-C, Harty M, Bashford G, et al. (2019) Factors related
+to intra-tendinous morphology of Achilles tendon in runners. _PLoS ONE_ 14(8): e0221183. https://doi.org/10.1371/journal.pone.0221183
+
+The article is available at https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0221183
+
+We explored this data set in the initial labs this semester...
+
+```{r}
+library(tidyverse)
+data(TendonData) #Version of data set from catstats2
+tendon <- TendonData
+
+tendon <- tendon %>% 
+      rename(SubjectID = 'Subject ID', 
+             Sex = 'Sex  (M=1)',
+             CurrPain = 'CurrPain (Y=1)',
+             WaisttoHip = 'Waist to Hip', 
+             VISAA = 'VISA-A',
+             Neovascularization = 'Neovascularization (Doppler) (Y=1)',
+             HistoryPain = 'Hx Pain (Y=1)') %>%
+      mutate_if(is.character, as.factor) %>% 
+      mutate(CurrPain = factor(CurrPain),
+             Neovascularization = factor(Neovascularization),
+             Sex = factor(Sex),
+             HistoryPain = factor(HistoryPain))
+tendonna1 <- tendon %>% drop_na(CSA)
+tendonna2 <- tendon %>% drop_na()
+tendonna2 <- tendonna2 %>% mutate(
+  Sex = fct_recode(Sex,
+                   "Female" = "0",
+                   "Male" = "1"),
+  Location = factor(substr(SubjectID, 1, 3))
+  )
+lm2 <- lm(PSFR ~ Sex, data = tendonna2)
+summary(lm2)
+lm2 %>% tbl_regression(intercept = T) %>% add_global_p()
+```
+
+The prior work led to us having the following estimated model and size interpretation.
+
+
+* $\hat{\mu}\{PSFR|Sex\} = 2.02 - 0.105I_{Sex = Male}$
+
+* where $I_{Sex = Male}$ is 1 for a male observation and 0 otherwise
+
+**For two otherwise similar subjects but that differ on the sex of the subjects, the estimated mean PSFR level of male subjects is 0.10 $\text{mm}^{-1}$ lower than that of female subjects, controlled for subject-to-subject variation (95% CI from  0.05 to 0.16).**
+
+**There is strong evidence against the null hypothesis of no difference in the true mean PSFR between the sexes of the subjects ($t_{162} = -4.05$, 2-sided p-value < 0.0001), so we would conclude there is a difference and keep it in the model.**
+
+
+1) Repeat the previous analysis but with a linear mixed model that accounts for the repeated measures on the same subject. Fit the model and report a model `summary` and `tbl_regression(intercept = T)` on it. No discussion yet.
+
+
+```{r}
+lmer <- lmer(PSFR ~ Sex + (1|SubjectID), data = tendonna2)
+summary(lmer)
+lmer %>% tbl_regression(intercept = T) %>% add_global_p()
+```
+
+2) Revise the previous "size" sentence based on the two-level mixed model results.
+
+* $\hat{\mu}\{PSFR|Sex\} = 2.02 - 0.105I_{Sex = Male}$
+
+* where $I_{Sex = Male}$ is 1 for a male observation and 0 otherwise
+
+**For two otherwise similar subjects but that differ on the sex of the subjects, the estimated mean PSFR level of male subjects is 0.10 $\text{mm}^{-1}$ lower than that of female subjects (95% CI from  0.04 to 0.17).**
+
+
+3) The evidence sentence for the previous `lm` is also provided above. Update it to reflect the two-level mixed model results.
+
+**There is strong evidence against the null hypothesis of no difference in the true mean PSFR between the sexes of the subjects ($t_{80} = -3.199$, 2-sided p-value = 0.00198), controlled for subject-to-subject variation, so we would conclude there is a difference and keep it in the model.**
+
+
+In the previous work with these data, we fit the following model:
+
+```{r}
+lm2_all <- lm(PSFR ~ Age + Sex + BMI + WaisttoHip + YearsRunning + CurrPain +
+                   HistoryPain + VISAA + CSA + Neovascularization + KneeWall +
+                   HeelRaise,
+  data = tendonna2
+)
+Anova(lm2_all)
+```
+
+
+4) Fit the linear mixed model that accounts for the subject with the same suite of fixed effects as in `lm2_all` and make a `model_diagram`. Use the diagram to write a couple of sentences to report the levels of the hierarchy for each of the predictors (subject or leg in subject are the options).
+
+**The SubjeectID level has 82, which accounts for all of the individual subjects. Each of these 82 subjects went through two repeated observations based on side (L or R), which results in the 164 observations on the second level. Age, sex, BMI, WaisttoHip, years running, pain history, and VISAA are all variables arrigned at the subject level. CurrPain, CSA, Neovascularization, KneeWall, and heelraise on the other hand are recorded per leg. **
+
+
+```{r}
+lmer_all <- lmer(PSFR ~ Age + Sex + BMI + WaisttoHip + YearsRunning + CurrPain +
+                   HistoryPain + VISAA + CSA + Neovascularization + KneeWall +
+                   HeelRaise + (1|SubjectID),
+  data = tendonna2
+)
+
+model_diagram(lmer_all, heightVal = 800)
+```
+
+
+
+
+5) As we discussed in one of the labs, there is another issue here with two different locations where the tests were performed, with each subject being nested within one of the two locations. The location information is available in the `Location` variable that is created in the provided code. Add `Location` to the model as a random effect with the same fixed effects as in the previous question and remake the `model_diagram`. Discuss why there are no `Location` level predictors in the model.
+
+**There are no location level predictors because none of the recorded information differs by site. If there were environmental factors that were used as predictors those may show up on a site level, but currently in the model there is nothing that differs at a site-specific level.**
+
+```{r}
+lmer_site <- lmer(PSFR ~ Age + Sex + BMI + WaisttoHip + YearsRunning + CurrPain +
+                   HistoryPain + VISAA + CSA + Neovascularization + KneeWall +
+                   HeelRaise + (1|Location/SubjectID),
+  data = tendonna2
+)
+
+model_diagram(lmer_site, heightVal = 800)
+
+summary(lmer_site)
+```
+
+
+6) Write a sentence that interprets the following estimated ICC:
+
+**Once we account for location and subjectID, the estimated correlation of the two grip strength measurements is 0.62. This indicates some correlation between two observations once we account for systematic changes across subjects and location.**
+
+```{r}
+(0.002082 + 0.015759)/(0.002082 + 0.015759 + 0.011038)
+
+```
+
+
+7) Generate an ANOVA F-test table from the three-level mixed model. For `WaisttoHip` (ratio of the waist to hip measurements) and HeelRaise (number of heel raises), report the F-statistics, distributions under the null, and p-values. No other discussion - just extract those "numerical" results outside the code output.
+
+WaisttoHip: $F_{1,72.041} = 0.4139, p-value = 0.52205$
+
+HeelRaise: $F_{1,115.713} = 0.0932, p-value = 0.76064$
+
+```{r}
+Anova(lmer_site, test.statistic = "F")
+```
+
+# Part II: Moth log-latency mixed models
+
+Continuing with Fabusova et al. (2024) and the provided data set ("moths.xlsx") to answer the following questions.
+
+* Fabusova M, Gaston KJ, Troscianko J. 2024 Pulsed artificial light at night alters moth flight behaviour. Biol. Lett. 20: 20240403. https://doi.org/10.1098/rsbl.2024.0403
+
+
+```{r}
+library(readxl)
+moth <- read_excel("moths.xlsx", 
+     sheet = "complete_dataset_MAIN FAMILIES.", 
+    na = "NA")
+
+library(lubridate)
+moth <- moth %>% mutate(Date = factor(ymd(Date))) %>% dplyr::select(-Sunset_time)
+
+moth2 <- moth %>% drop_na(Date, ID, Location, Treatment, Treatment_y_n, Colour, Spectra, Moon_Phase, Temp, Wind_speed_ms, Humidity, Common_name, Latin_name, Family, Sub_family, Latency) #Slight change from prior HW to keep more observations!
+
+moth2 <- moth2 %>% mutate(Treatment = fct_recode(factor(Treatment),
+                                                 "Cold Phosphor" = "1",
+                                                 "Warm Phosphor" = "2",
+                                                 "Cold RGB" = "3",
+                                                 "Warm RGB" = "4"), #5 recoding not needed - controls dropped
+                          logLatency = log(Latency),
+                          Colour = factor(Colour),
+                          Spectra = factor(Spectra))
+```
+
+
+Usually we don't have such specific "genetic" (or familial?) information to group observations and I tend to worry more about time and space of data collection leading to similar observations that need to be built into the random effects in models. Since there are just four families of moths, it seems like accounting for that with a fixed effect might be reasonable, especially if the researchers wanted to directly compare characteristics between moth families (if the RQ had been "how do moth families differ on log-latency?"). By switching the random family effect to a fixed effect, we can account for the repeated measures on multiple moths collected on each sampling date at each location using a `Location and Date` set of random effects. This is more typical for what we would try to do in terms of using random effects to account for repeated measures and then still have some potential account for other systematic differences based on characteristics of interest across the subjects. But which way should we model the nesting? The following code tries the nesting in two directions:
+
+
+```{r fig.width = 14}
+tally(Date ~ Location, data = moth2)
+
+moth2 %>% dplyr::select(Date, Location) %>% mutate(Location = factor(Location)) %>% 
+  alluvial_wide(fill_by = "last_variable")
+
+lmerLD <- lmer(logLatency ~ Moon_Phase + Colour + Spectra + Wind_speed_ms+ Family+ (1|Location/Date), data = moth2)
+
+lmerDL <- lmer(logLatency ~ Moon_Phase + Colour + Spectra + Wind_speed_ms+ Family+ (1|Date/Location), data = moth2)
+
+model_diagram(lmerLD, heightVal = 700)
+model_diagram(lmerDL, heightVal = 700)
+```
+
+8) The study notes that they repeatedly visited the same five transects and caught and released some number of moths on each date they visited. The previous code fits the random effects two different ways. Which model, `lmerDL` or `lmerLD`, provides five locations and groups all the moths obtained on a given night within the location together in the diagram?
+
+**lmerLD, the first model diagram, provides five locations and groups all the moths obtained on a given night within the location together in the diagram. It starts with the 5 levels of location, then groups within each location by date.**
+
+
+9) Find the R-squareds for your selected model and write two sentences to interpret them. Make sure you are clear about the contents of the model being discussed in each sentence. Discuss what the results suggest about the aspects of the model and how well they explain the response.
+
+**The fixed effects of Moon_Phase, Colour, Spectra, Wind_speed_ms, and Family explain 13.1% of the variation in the log latency time. This suggests that while these variables contribute to the explanation of latency time, a large portion of the variation is still unaccounted for, potentially due to other factors not included in the model.The fixed effects with the random effects of location and date together explain 13.56% of the variation in log latency time. The small increase in variance explained by adding the random effects indicates that differences between locations and dates have a modest impact on latency time, and the model overall still leaves much of the variability unexplained.**
+
+
+```{r}
+r.squaredGLMM(lmerLD)
+```
+
+
+
+10) For your chosen model, `lmerLD` or `lmerDL`, write out the theoretical model for the response and define any aspects of that model, but you can leave the fixed effects represented in the model as $\mu_{ijk}$ and should not get in the x's and beta's part of it (that is very long here and something we can do another time). Do make sure you define the subscripts you are using and the distributions of the random parts of the model. To help you with that, we started writing out the model:
+
+* $logLatency_{ijk} = \mu_{ijk} + u_{jk} + \upsilon_k + \epsilon_{ijk}$
+
+* where $\epsilon_{ijk} \sim N(0, \sigma^2_\epsilon)$ is the residual error term accounting for variation in individual observations, 
+$u_{jk} \sim N(0, \sigma^2_{jk})$ is the random intercept for date j nested within location k, 
+$\upsilon_k \sim N(0, \sigma^2_k)$ is the random intercept for location $k$.
+
+* and $i = 1,...,n_{jk}$ (individual moths within date $j$ and location $k$), 
+$j = 1,..., J_k$ (dates within location k),
+$k = 1,..., K$ (locations). 
+
+
+```{r}
+summary(lmerLD)
+
+lmerLD %>% tbl_regression(intercept = T)
+```
+
+11) Note any resources used outside those provided during the class, impactful discussions with other students, or report NONE:
+
+**NONE**

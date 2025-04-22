@@ -1,0 +1,224 @@
+---
+title: "HW 6"
+output:
+  word_document:
+    fig_height: 5
+    fig_width: 8
+date: "Due March 7"
+author: "No names needed - indicate group members in gradescope"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+options(show.signif.stars = FALSE)
+
+library(ggplot2)
+library(ggthemes)
+library(tidyverse)
+library(car)
+library(effects)
+library(mosaic)
+library(ggmosaic)
+library(remotes) #Needed for next two installs from github:
+
+#Re-comment this after running it once:
+#remotes::install_github("greenwood-stat/ggResidpanel")
+library(ggResidpanel)
+#remotes::install_github("greenwood-stat/catstats2")
+library(catstats2)
+library(gtsummary)
+library(lubridate)
+library(patchwork)
+library(MuMIn)
+library(lmerTest)
+library(cetcolor)
+library(ggrepel)
+theme_set(theme_bw()) #Prevents need for + theme_bw() in ggplots
+```
+
+# HW 6 Instructions:
+
+* In groups of 2 to 4 (your choice of group members, but you must be in a group to complete the submission), complete the following questions. If you are having trouble identifying group members, post in the Water Cooler channel in MS Teams.
+
+Read Fabusova et al. (2024) and use the provided data set ("moths.xlsx") to answer the following questions.
+
+* Fabusova M, Gaston KJ, Troscianko J. 2024 Pulsed artificial light at night alters moth flight behaviour. Biol. Lett. 20: 20240403. https://doi.org/10.1098/rsbl.2024.0403
+
+## Part I: Modeling log-latency times
+
+Suppose that the researchers wanted to build a model to estimate the effects of the light treatments but wanted to control for environmental conditions and explore one possible interaction, but are not quite sure which ones they should include. First, we need to explore a new variable in the data set, the phase of the moon.
+
+```{r}
+library(readxl)
+moth <- read_excel("moths.xlsx", 
+     sheet = "complete_dataset_MAIN FAMILIES.", 
+    na = "NA")
+
+library(lubridate)
+moth <- moth %>% mutate(Date = factor(ymd(Date))) %>% dplyr::select(-Sunset_time)
+
+moth2 <- moth %>% drop_na(Date, ID, Location, Treatment, Treatment_y_n, Colour, Spectra, Moon_Phase, Temp, Wind_speed_ms, Humidity, Common_name, Latin_name, Family, Sub_family, Latency) #Slight change from prior HW to keep more observations!
+
+moth2 <- moth2 %>% mutate(Treatment = fct_recode(factor(Treatment),
+                                                 "Cold Phosphor" = "1",
+                                                 "Warm Phosphor" = "2",
+                                                 "Cold RGB" = "3",
+                                                 "Warm RGB" = "4"), #5 recoding not needed - controls dropped
+                          logLatency = log(Latency))
+```
+
+Note: Use `moth2` for the remaining questions.
+
+1) One of the variables we will consider in the models in this assignment is the phase of the moon (`Moon_Phase`). Make a plot of the log-latency versus the moon phase. Discuss the pattern of results based on the plot.
+
+**All Moon patterns seem to have mean log-latency values ranging from 2-3 log seconds, however full moon sits lower at around 0.7 log seconds. The full moon phase also has a distinctly compact spread compared to the other phases. **
+
+```{r fig.width = 12}
+enhanced_stripchart(logLatency ~ Moon_Phase, data = moth2) + 
+  labs(y = "Latency (log seconds)")
+```
+
+
+
+One option within `dredge` is to set some of the variables to always be kept in the model, using the "fixed = ..." option as shown below. 
+
+```{r}
+lmFull <- lm(logLatency ~ Humidity * Temp + Wind_speed_ms + Moon_Phase + Treatment, data = moth2)
+summary(lmFull)
+lmFull %>% tbl_regression(intercept = T)
+```
+
+
+```{r fig.height = 10, fig.width = 12}
+
+plot(allEffects(lmFull, residuals = T), grid = T)
+```
+
+```{r}
+options(na.action = "na.fail")
+
+Fullres <- dredge(lmFull, rank = "AIC", fixed = "Treatment")
+Fullres
+dim(Fullres)
+```
+
+2) How many models were explored in the provided dredge results? What was in the top model and next best model on AIC - make sure you are very specific about the models? 
+
+**20 models were explored in the provided dredge results. The top model included treatment and windspeed with an AIC of 1002.6. The second best model had a delta AIC of 0.07 and included treatment and moon phase. **
+
+
+3) Report and then explain the DF results for the top two AIC models - be specific.
+
+**The top AIC model has an intercept, one slope for wind speed, three slopes for the indicators for the treatment variable, and the variance of the errors (1 + 1 + 3 + 1 = 6)**
+
+**The second best AIC model has an intercept, moon phase (8 levels, so 7 indicators and related slopes are needed), and the three slopes for the indicators for the treatment variable, and the variance of the errors (1 + 7 + 3 + 1 = 12).**
+
+**The degrees of freedom for the top model was 6, which is explained by the 4 treatment groups, the windspeed variable, and the residual error associated with the model. The second model had a df of 12, explained by the 4 treatment groups, the 7 moon phase indicator variables, and the residual error associated with the model. **
+
+
+4) Report two evidence sentences, one that compares the evidence from the AICs related to the top two models and another that compares the evidence of the top model versus the mean-only model, using numeric support.
+
+**There is weak support for the top AIC model that contained treatment and wind speed versus the next best model that contained moon phase and treatment, with a difference of 0.07 AIC units between the two models.**
+
+**There is strong support for the top AIC model versus the mean-only model with a difference of 18.5 AIC points to the mean-only model.**
+
+**Model 9 has the lowest AIC value, however, since the delta AIC value for model 3 is only 0.07 there is similar support for both models. There is strong evidence in support of these two models against the mean-only model as the delta AIC units for these are both above 4. **
+
+
+5) For the top AIC model from the previous exploration, write out the estimated model, clearly defining any indicator variables used.
+
+* $\hat{\mu}\{logLatency | Treatment, Wind Speed\} = 1.379 + 0.165WindSpeed + 0.531I_{Treatment = Warm Phos} + 0.531I_{Treatment = CoolRGB} + 0.781I_{Treatment = WarmRGB}$
+
+* where $I_{Treatment = Warm Phos}$ is 1 for warm phosphor observation and 0 else, $I_{Treatment = Cool RBG}$ is 1 for cool RGB observation and 0 else, and $I_{Treatment = Warm RBG}$ is 1 for watm RGB observation and 0 else. 
+
+6) Suppose that researchers ran the following code after the previous results:
+
+```{r}
+lmR1 <- lm(logLatency ~ Humidity + Treatment, data = moth2)
+summary(lmR1)
+Anova(lmR1)
+```
+We discussed that reporting p-values after model selection is typically inappropriate as the p-values are invalid. Which _one_ of the following is the reason that it is OK to report the p-value for the F-test for `Treatment` from `Anova`:
+
+a) The variable is randomly assigned, so it is always OK to report a p-value, even if the term is subjected to potential selection or not in a model selection process.
+
+b) It is always appropriate to report p-values because we are using `Anova`.
+
+**c) The test is valid to report because Treatment was not subjected to potential selection or not using `dredge`.**
+
+d) It is valid to discuss it because the p-value is very small and so the test is statistically significant.
+
+
+## Part II: Introduction to Linear Mixed Models
+
+For the binary outcome models like "Flight to Light" that we saw in a previous homework, the researchers accounted for the family and sub-family of the moths to account for repeated measures on similar types of moths. Oddly, their model for log-Latency failed to account for this and so is easily critiqued as having a violation of independence without this. In all of their models, they failed to account for repeated measures on more than one moth in each observation session, but we will save exploring that for the future...
+
+Linear mixed models allow us to incorporate information on the grouping of observations in clusters or repeated measures of individuals or groups of individuals. They can also handle hierarchical structures such as accounting for variability in the response based on the family and then sub-family within the family of the moths. We will discuss these more in the future, but linear mixed models involve incorporating what are called "random effects" to account for the groups and possibly sub-groups of measurements along with "fixed effects" that are the "regular" predictors we have been discussing in the linear models. For example, the following model for log-Latency adds in the family and sub-family as random effects using the notation `(1|Family/Sub_family)` that is then "added" to the fixed effects explored above.
+
+Generally I treat getting the random effects part of the model "correct" to be based on the study design and not based on numerical comparisons of models with and without the random effects. My thought is that a model without the random effects has a clear violation of independence, so its results (like AICs) are not valid, although some people also use model selection criteria to select the random effects to use when there are multiple options. Here, I am more interested in looking at the fixed effects that might be selected _if_ we account for repeated measures on moths.
+
+The following code adds the random effects to the previous "Full" model and repeats the same "dredging" process. Note that `REML = F` is only used when doing model selection with information criteria and should be deleted for regular frequentist inference from the mixed models (t-tests, F-tests, and confidence intervals).
+
+
+```{r}
+lmerFull <- lmer(logLatency ~ Humidity * Temp + Wind_speed_ms + Moon_Phase + Treatment + (1|Family/Sub_family), data = moth2, REML = F)
+dredge(lmerFull, fixed = "Treatment", rank = "AIC")
+```
+
+7) Based on the provided mixed model and dredge results, what is in the top two AIC models, along with two added random effects for Family and Sub-family? How did results change in terms of relative ranking/evidence from the `lm` version? Discuss the differences in AIC values between the top two AIC models for the mixed model and the lm version.  
+
+**The top model is model 3, with fixed effects of moon phase and treatment. The second best model is model 11, with fixed effects for moon phase, treatment, and wind speed. The delta AIC value for model 11 is only 0.9, which suggests that this model also has strong support. There is strong evidence for both of these models against the mean only model as delta AIC values for the mean only are 5.67 and 4.77, which are both above a threshold of 4. **
+
+8) Refit the top mixed model from the previous results and then make an effects plot with partial residuals. No discussion.
+
+
+```{r fig.width = 12, fig.height = 12}
+lmer_final <- lmer(logLatency ~ Moon_Phase + Treatment + (1|Family/Sub_family), data = moth2)
+
+plot(allEffects(lmer_final, residuals = T), grid = T)
+```
+
+
+## Part III: Introduction to Generalized Linear Mixed Models
+
+The authors used this approach for modeling the binary responses by adding random family and sub-family in family random effects to the logistic regression models from the previous related homework. We switch to the `glmer` function from `lme4` to be able to combine GLMs and random effects.
+
+The following code restarts where we left the `Fly_Into_Light` model:
+
+```{r}
+moth3 <- moth %>% drop_na(Date, ID, Location, Treatment, Treatment_y_n, Colour, Spectra, Moon_Phase, Temp, Wind_speed_ms, Humidity, Common_name, Latin_name, Family, Sub_family, Fly_Into_Light) #Slight change from prior HW to keep more observations!
+
+moth3 <- moth3 %>% mutate(Treatment = fct_recode(factor(Treatment),
+                                                 "Cold Phosphor" = "1",
+                                                 "Warm Phosphor" = "2",
+                                                 "Cold RGB" = "3",
+                                                 "Warm RGB" = "4"), #5 recoding not needed - controls dropped
+                          Fly_Into_Light = factor(Fly_Into_Light))
+
+
+glmT <- glm(Fly_Into_Light ~ Treatment, data = moth3, family = binomial)
+summary(glmT)
+plot(allEffects(glmT), grid = T, type = "link")
+plot(allEffects(glmT), grid = T, type = "response")
+
+```
+
+The following code fits a model very similar to what the authors report in Table S8 in their supplemental material (Spectrum and Color are modeled differently - more soon on that - also note that our sample size might differ). The following code considers the results for selecting from their initial model.
+
+
+```{r}
+glmerFull <- glmer(Fly_Into_Light ~ Humidity * Temp + Wind_speed_ms + Moon_Phase + Treatment + (1|Family/Sub_family), data = moth3, family = binomial)
+summary(glmerFull)
+d1 <- dredge(glmerFull, rank = "BIC")
+d1
+```
+
+9) Write an evidence sentence for the top BIC model from the dredge results and discuss what this suggests.
+
+**The top model is the mean-only model (along with the two random effects) and it is 2.2 BIC units better than the model with temperature added, suggesting strong evidence for the top model. But since the model is “doing nothing” in terms of the fixed effects, the results suggest that there are no useful predictors or there is strong support for not including any predictors once we account for the repeated measures on types of moths, at least based on the BIC way of making comparisons.**
+
+10) Document any collaborations or pertinent discussions with other students or resources outside of your group and the resources that I am providing and the _Sleuth_ that you used to complete this assignment *or report that you did not have any*. If you used generative AI (chatGPT, Bard, etc.), report which question(s) and how/what you asked for.
+
+**NONE**
+

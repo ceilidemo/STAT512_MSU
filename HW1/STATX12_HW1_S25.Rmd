@@ -1,0 +1,186 @@
+---
+title: "HW 1"
+output:
+  word_document:
+    fig_height: 5
+    fig_width: 8
+date: "Due Wednesday, January 22 at 9 am"
+author: "Ceili DeMarais"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+options(show.signif.stars = FALSE)
+
+library(ggplot2)
+library(ggthemes)
+library(tidyverse)
+library(car)
+library(remotes) #Needed for next two installs from github:
+library(ggResidpanel)
+library(catstats2)
+library(Sleuth3)
+library(patchwork)
+theme_set(theme_bw()) #Prevents need for + theme_bw() in ggplots
+```
+
+# HW 1 Instructions:
+
+You may discuss the work with other students but should complete this assignment in an independent fashion (you should try the code and writing on your own but can benefit from discussions with other students). At the end of the assignment you will document any discussions that have a substantive impact on your results. Also document any resources you used outside of those that I provide, including things like ChatGPT.
+
+Answer each question inline after the prompts with pertinent code, results, and graphs preceding your written answer.
+
+Make sure to run spell-check using the "ABC check" button near the filename or use the text underlining suggestions in the document. Knit this .Rmd to word, then convert the word document to a PDF. Submit just the PDF for grading in gradescope.com HW 1.
+
+**Uncomment the lines of code above to install `ggResidpanel` and `catstats2` from my github repository. Then re-comment them for all following use of the file.** Contact us ASAP if you have difficulties installing and loading the packages or finding the data set. The most critical package for this assignment is `catstats2`.
+
+After knitting this document to a Word document, save as or print to PDF to create a PDF of the file. Submit this document to gradescope.com and use the interface to identify the pages that contain the questions and your answers for each numbered question.
+
+
+## MS Teams Access:
+
+1) MS Teams OneNote access: It is critical that you gain access to OneNote from MS teams that is tied to our MS Teams channel to access lecture notes, daily announcements (provided near the starting point for each lecture day), and feedback on projects. To prove you have access and help us to learn who you are, please post a selfie/picture of you where you are identifiable in your Homework - HW 1 Selfie page in OneNote. Only the instructors will see the picture. No discussion, just the work in OneNote. 
+
+
+## Sitting and brain size... initial exploration:
+
+
+* Read Siddarth P, Burggren AC, Eyre HA, Small GW, Merrill DA (2018) Sedentary behavior
+associated with reduced medial temporal lobe thickness in middle-aged and older adults. PLoS ONE 13(4): e0195549. https://doi.org/10.1371/journal.pone.0195549
+
+* The data were downloaded from https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0195549 and are provided in `catstats2` with `data(sit_and_brain)` with some information about the data set via `help(sit_and_brain)`.
+
+* Note that the questions are inspired by the practice problems in https://bookdown.org/roback/bookdown-BeyondMLR/ch-MLRreview.html#introduction-to-beyond-multiple-linear-regression
+
+
+Siddarth et al. (2018) researched the relationship between time spent sitting (sedentary behavior) and the thickness of a participant’s medial temporal lobe (MTL) in a 2018 paper entitled, “Sedentary behavior associated with reduced medial temporal lobe thickness in middle-aged and older adults”. In other research, MTL volume has been found to be negatively associated with Alzheimer’s disease and memory impairment. Key variables measured in this study include:
+
+* TOTAL = Medial temporal lobe thickness in mm 
+
+* Sitting = Reported hours/day spent sitting
+
+* METminwk = Reported metabolic equivalent unit minutes per week
+
+* Age = Age in years
+
+* Sex = Sex (M = Male, F = Female)
+
+* Educ = Years of education completed
+
+
+```{r}
+library(catstats2)
+data(sit_and_brain)
+glimpse(sit_and_brain)
+```
+
+
+2) In their article’s introduction, Siddarth et al. differentiate their analysis on sedentary behavior from an analysis on active behavior by citing evidence supporting the claim that, “one can be highly active yet still be sedentary for most of the day”, suggesting that the two potential predictor variables might not be related to each other. Make a scatterplot of the `METminwk` and `Sitting` using ggplot and add linear and nonparametric smoothing lines. No discussion. 
+
+* Make sure to add a title to the figure and modify the axis labels to include the units of the variables (in parentheses) and make the plot so you can see any points that are overplotting (either using alpha or jittering or both).
+
+```{r}
+sit_and_brain %>% ggplot(mapping = aes(y = METminwk, x = Sitting)) + 
+  geom_point(alpha = 0.5) + 
+  geom_smooth(method = "lm") + 
+  geom_smooth(col = "red", lty = 2, se = F) +
+  labs(x = "Time spent sitting (hr/d)",
+       y = "Reported metabolic equivalent units (min/wk)", 
+       title = "Plot of metabolic activity (min/wk) versus time spent sitting (hr/day)")
+```
+
+
+3) Fit a linear model with `METminwk` and `Sitting` as your explanatory and response variables where the variable on the y-axis in your previous plot is the response variable for this model. Calculate and report the R-squared for this model in a sentence. Then use the R-squared result (no tests or other measures) to discuss the claim that sedentary behaviors are not related to physical activity _in these data_. 
+
+  * The R-squared value 0.005345 suggests that 0.5345% of the variation in METminwk is explained by the model that contains time sitting. This very small percentage suggests very weak evidence to support the claim of a relation between sedentary behavior and physical activity.
+
+
+```{r}
+model <- lm(METminwk ~ Sitting, data = sit_and_brain)
+summary(model)
+```
+
+4) Fit a preliminary SLR model with `TOTAL` as the response and `Sitting` as the sole explanatory variable. Summarize the "size" using the predictive version of the slope interpretation and "evidence" (report the t-test result) for the predictor in this model. See Greenwood (202X) Section 1.9.1 and the review lecture notes and related recording for more on reporting these two aspects of the slope in this model.
+
+```{r}
+slr1 <- lm(TOTAL ~ Sitting, data = sit_and_brain)
+summary(slr1)
+
+```
+
+* Evidence: There is moderate to strong evidence against the null hypothesis of no linear relationship between time spent sitting and Medial temporal lobe thickness ($t_{33} = -2.476, 2-sided p-value = 0.0186), so we conclude that there is a linear relationship between them. 
+
+
+* Size: For a 1 unit increase in the hours spent sitting, the estimated mean Medial temporal lobe thickness decreases by 0.02288 mm. 
+
+
+5) Now fit a linear model for `TOTAL` that contains `Sitting` and `METminwk` (no interaction). Use the estimated model to predict the `TOTAL` for a subject that sits for 14 hours per day and has a MET of 5000 minutes per week (show your code and work for doing this). 
+
+```{r}
+mlr1 <- lm(TOTAL ~ Sitting + METminwk, data = sit_and_brain)
+summary(mlr1)
+
+2.703 - (0.02293*14) - (0.000001886*5000)
+
+```
+
+
+* We predict that a subject that sits for 14 hours a day and has a MET of 5000 minutes per week, will have a Medial temporal lobe thickness of 2.37255 mm. 
+
+
+
+
+6) Select **all** of the following that apply related to the previous model and prediction (Note in answer which letters you are selecting - no discussion).
+
+a) The prediction is problematic because the combination of the two predictors is not actually possible in a week based on a week having 24 hours $\times$ 60 minutes $\times$ 7 days = 10,080 minutes.
+
+**b) The prediction is problematic because it is extrapolation since the combination of the two predictors is far from the combinations of the two predictors observed in the data set, as seen in the scatterplot.**
+
+c) The prediction is not problematic because it is not extrapolation since the value of each of the predictors was observed in the data set, as seen in the scatterplot.
+
+**d) Because we used least squares estimation to find the slope coefficients in the model, it is reasonable to generate predictions from the model since it minimized the squared error to find the slope coefficients.**
+
+e) Based on the two-sided p-value for `METminwk` from the t-test in the model, we would reject the null hypothesis of `METminwk` being related to the response and would keep it in the model.
+
+f) Based on the last row of the model `summary` output with F(2,32) = 2.976 and a p-value of 0.065, we should remove the `METminwk` from the model because the p-value is not significant. 
+
+**Chosen letters are bolded.**
+
+
+
+
+7) Write a _Scope of Inference_ for this study for the model that contains `Sitting` and `METminwk` for `TOTAL`. See the related discussion in Greenwood (202X) Section 1.7. 
+
+  * We cannot generalize inference to the population of interest because the sample was not random and could be biased. We cannot establish causal inference due to lack of random assignment of the treatment. 
+
+
+
+8) In the Statistical Sleuth Chapter 11, Display 11.5 shows a plot of two variables from the `case1102` data set from the `Sleuth3` R package. The following improves on the code in the help file for case1102 using `mutate` to make the variables needed for the plot. Use ggplot to make a plot similar to Display 11.5 but that either jitters or uses transparency (alpha) for the points displayed and adds nonparametric smoothing lines for each `Treatment` group. You do not need the "fancy" double axis tick marks they used in the book, this can just be on the log-scale. 
+
+
+```{r}
+library(dplyr)
+data(case1102)
+case1102 <- case1102 %>% mutate(ratio = Brain/Liver,
+                                logTime = log(Time),
+                                logratio = log(ratio))
+
+case1102 %>% ggplot(mapping = aes(x = logTime, y = logratio)) +
+  geom_point(mapping = aes(col = Treatment), alpha = 0.5) +
+  geom_smooth(mapping = aes(col = Treatment), method = "loess", alpha = 0.5) +
+  scale_color_manual(values = c("BD" = "red", "NS" = "blue"),
+                     labels = c("Barrier disruption", "Saline control")) +
+  labs(x = "log Sacrifice Time (hrs)",
+       y= "log Tumor to Liver Concentration Ratio",
+       title = "Scatterplot of log tumor to liver concentration ratio verses log sacrifice time \n colored by treatment")
+```
+
+
+9) I want to check your version of R. Do not edit the code below as it will check your version of R and report that in the knitted document. You should be using R 4.4.2 and you should make sure your packages are relatively up to date.
+
+* R version (short form): `r getRversion()`
+
+10) Document any collaborations or pertinent discussions with other students or resources outside of those that I am providing and the _Sleuth_ that you used to complete this assignment *or report that you did not have any*. If you used generative AI (chatGPT, Bard, etc.), report which question(s) and how/what you asked for.
+
+  * NONE

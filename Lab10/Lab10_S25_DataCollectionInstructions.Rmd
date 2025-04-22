@@ -1,0 +1,97 @@
+---
+title: "Lab 10 Data Collection"
+output:
+  word_document:
+    fig_height: 5
+    fig_width: 8
+date: ""
+author: "Attendance Only Assessed"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+options(show.signif.stars = FALSE)
+
+library(ggplot2)
+library(ggthemes)
+library(tidyverse)
+library(car)
+library(effects)
+library(readxl)
+library(mosaic)
+library(yarrr)
+library(psych)
+library(MuMIn)
+library(patchwork)
+library(catstats2)
+theme_set(theme_bw()) #Prevents need for + theme_bw() in ggplots
+```
+
+# Data collection instructions
+
+Do not injure yourself in an attempt to get a "good" number. This is more about study design principles than about the specific results. Give each part a good effort and have fun and be safe!
+
+You can opt out either due to missing data collection or if you have any reason to not want to provide data. You can also submit data and then email me with your ID to have it removed from the analysis, but it will be public when submitted in the shared spreadsheets.
+
+1) Divide into groups of 3 or 4 as instructed in the session and come up with a group "name". Make this name family-friendly and be clear about upper/lower case for it. Write it down somewhere.
+
+2) Create a Subject ID for each group member and write it down. Use the last city outside of Montana that you spent time in pasted together with the mascot name of your favorite school or sports team or favorite band name. Check the existing spreadsheet to make sure the name combination doesn't already exist.
+
+## Grip tests:
+
+Each subject will take six measurements in all combinations of dominant hand/non-dominant hand (let's call the dominant hand the one you write with most frequently) and three arm positions using the grip tester. One grip measurement per combination.
+
+1) Turn on the grip tester, **make sure it is in lb units, not kg for all measurements!** You can have one practice run before taking recorded measurements. Designate one group member to record and enter the results for each group member.
+
+2) Change the random number seed **for each subject** and run the code **once for each subject** to get a new randomized order for each set of six observations. Complete the six measurements in the order that was generated, waiting 10 seconds between measurements.
+
+```{r}
+hand <- (rep(c("D", "ND"), each = 3)) #D is dominant, ND is nondominant
+armpos <- factor(rep(rep(c("up", "90", "down")), 2))
+treats <- factor(interaction(armpos, hand))
+set.seed(123)
+shuffle(data.frame(treats))[,1]
+```
+
+3) Enter the observations of grip strength **in lbs** for all six observations along with the combination of hand and position based on the randomly assigned order (enter the measurements in the order taken from 1 to 6) into the shared the Excel file for GripStrengthMeasurements in MS Teams at https://montanaedu.sharepoint.com/:x:/s/STATX12Spring2025/EVb4TYSt7UZPs6wNh6hcq9kB6dMe5BX9veBGB1X5ODEqMg?e=PkI5om
+
+* The "Order" variable is the order you took the measurements in (first observation is 1, sixth is 6). Use the Order variable to find a set of 6 rows that are not being used to enter observations for each subject.
+
+4) When you complete observations for one subject, switch roles so that the next subject can complete their 6 measurements. Repeat until observations have been taken on all group members, then pass the grip tester to a group that did not get one to start.
+
+5) Record the grip tester ID from the bottom of the device your group used - enter that into the "Demographics" spreadsheet (see next section) in the GripTesterID column. It should be something like D1, D2, etc.
+
+## Demographics:
+
+Complete this before, while, or after you finish the grip strength tests.
+
+1) Go to MS Teams and the Demographics spreadsheet available at https://montanaedu.sharepoint.com/:x:/s/STATX12Spring2025/EaOmWqRx5EpKrute0IqlQ4gBU9YQdPtFlZHbiXXPVeib1A?e=B46bSS
+
+
+
+In that spreadsheet complete the following information for each subject (one row per subject in this version):
+
+SubjectID: Subject ID determined above - carefully match the case to the version you will/did use in the grip strength spreadsheet.
+
+GroupName: Make sure this matches across group members in this spreadsheet. Claim a set of rows for your group by entering this group name in as many rows as group members.
+
+2) In your groups, determine a timer who has a stopwatch on their phone and a first participant to measure balance time. One group member at a time, measure the balance time in seconds. The subject must fold arms across the chest, close eyes, and lift one foot (their choice) slightly off the ground. The time starts when the foot lifts and stops at **any** movement (not just when the foot touches the ground). Write down the time in seconds and continue through the measurements of all the subjects in your group. Enter the results **in seconds** in the row for each subject in the BalanceTime column.
+
+3) Use the measuring tape to measure the forearm length **in inches** from the point of the elbow to the midpoint of the prominent bone in the wrist. Enter the results in the ForearmLength column.
+
+4) Answer the eight questions on the Epworth scale from 0 to 3, then total up the responses. Enter the total into the Epworth column.
+
+![](Epworth.png)
+
+5) Enter Age in years in the Age column.
+
+6) Enter the approximate number of pull-ups you have done in the last 30 days in the PullUps column.
+
+7) Enter whether in a typical week whether you lift weights (yes/no) in the Weights column.
+
+8) Enter whether you have gone climbing (Climbing, yes/no) or done archery (Archery, yes/no) in the last six months in the columns with those names.
+
+9) Add the GripTesterID from the bottom of the grip tester you used for your measurements.
+
+Thank you for participating! More on Wednesday when we start to explore the results!

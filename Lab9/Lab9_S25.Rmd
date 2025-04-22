@@ -1,0 +1,183 @@
+---
+title: "Lab 9"
+output:
+  word_document:
+    fig_height: 5
+    fig_width: 8
+date: ""
+author: "DO NOT INCLUDE NAMES - Just add names in gradescope"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+options(show.signif.stars = FALSE)
+
+library(ggplot2)
+library(ggthemes)
+library(tidyverse)
+library(car)
+library(effects)
+library(readxl)
+library(mosaic)
+library(catstats2)
+library(ggResidpanel)
+library(easyalluvial)
+library(emmeans)
+library(patchwork)
+library(plotly)
+library(gtsummary)
+library(modelsummary)
+library(ggmosaic)
+library(ggrepel)
+library(cetcolor)
+library(MuMIn)
+library(lmerTest)
+theme_set(theme_bw()) #Prevents need for + theme_bw() in ggplots
+```
+
+
+# Rules
+
+In groups of 2 or 3, complete the following.
+
+# Modeling Snow Density
+
+We will be using the data set from Wetlaufer, Hendrikx, and Marshall (2016) - study where they explored the relationship between snow density ($kg/m^3$) or snow depth (`snow`, mm) or snow water equivalent (SWE, mm) with a suite of predictor variables. In this lab we will condition on there being snow present and then try to model snow density with models that will compete with what they discuss in Tables 3 and 4. We will be interested in using `elev` (Elevation, m), `Land` (forest cover with 0 = unforested and 10 = forested), `rad` (Potential Solar radiation, $Wh/m^2$),  `curvature` (see https://blogs.esri.com/esri/arcgis/2010/10/27/understanding-curvature-rasters/ for a description), `aspect` (orientation of slope in degrees (0 to 360 degrees)), and `angle` (angle of slope in degrees with 0 being flat) as predictors. Also pay attention to the `strata` variable (read its definition in the paper) and the role that played in the data collection and should in the analysis, as we will revisit this.
+
+* Wetlaufer, K., Hendrikx, J., and L. Marshall (2016) Spatial Heterogeneity of Snow Density and Its Influence on Snow Water Equivalence Estimates in a Large Mountainous Basin. _Hydrology_, 3(1):3, doi:10.3390/hydrology3010003. Available at http://www.mdpi.com/2306-5338/3/1/3/htm  and on D2L
+
+
+Run the following code to get re-started with the data set.
+
+```{r fig.width=8, fig.height=4}
+data(snowdepths)
+snowdepths <- snowdepths %>%
+  mutate(AspectCat = factor(case_when(
+    aspect %in% (0:45)~ "North",
+    aspect %in% (315:360)~ "North",
+    aspect %in% 45:(90+45) ~ "East",
+    aspect %in% (90+45):(180+45) ~ "South",
+    aspect %in% (180+45):315 ~ "West"
+  )),
+  SnowPresence = factor(case_when(
+    snow == 0 ~ "None",
+    snow > 0 ~ "Some"
+  )),
+  Landf = factor(cover),
+  Landf = fct_recode(Landf,
+                     "Not Forested" = "0",
+                     "Forested" = "10")
+  )
+
+snowdepthsR <- snowdepths %>% drop_na(density)
+
+ggintplot(response = "density", groupvars = c("Landf", "AspectCat"), data = snowdepthsR)
+
+lmA <- lm(density ~ Landf*AspectCat, data = snowdepthsR)
+Anova(lmA)
+lmA %>% tbl_regression(intercept = T)
+```
+
+
+The estimated model in `lmA` is  $\hat{\mu}\{Density|Land \ast AspectCat\} = 328  + 9.9I_{Landf = Forested} - 31 I_{AspectCat = North} + 15 I_{AspectCat = South} - 6.1 I_{AspectCat = West} - 41 I_{Landf = Forested} \cdot I_{AspectCat = North} - 8.1 I_{Landf = Forested} \cdot I_{AspectCat = South} -16 I_{Landf = Forested} \cdot I_{AspectCat = West}$
+
+
+1) Use the provided model to estimate the mean for a nonforested site that has an East aspect. Show/explain your work.
+
+**The estimated mean for a nonforested site with an East aspect is 328$kg/m^{3}$. Nonforested and East are both baselines for the categorical variables, so there are no indicator variables associated with them. Thus, we are left with the intercept. **
+
+```{r}
+328 
+```
+
+
+2) Use the provided model to estimate the mean for a nonforested site that has a North aspect. Show/explain your work.
+
+**The estimated mean for a nonforested site with an East aspect is 297$kg/m^{3}$. Nonforested is the baseline for the categorical variable, so the indicator for forested is set to 0. Thus, we are left with the intercept and the beta value associated with the indicator for North aspect. **
+
+```{r}
+328 - 31
+```
+
+3) The estimated slope for of the North indicator variable is -30.5. Write a size interpretation for that difference, using your previous work to help with being specific about what the slope estimates and remembering to add a 95% CI for that slope coefficient. Also note that the units for snow density are $kg/m^3$.
+
+**For two otherwise similar sites that are nonforested but differ in Aspect, the estimated mean snow density for the North aspect site is 30.5$kg/m^3$ lower than the East aspect site. (95% CI: -43,-18)**
+
+
+4) The following code generates Tukey's HSD results for the interaction model. Find the same estimated difference that you reported in the previous question (sign might be different) and report how that result is labeled in the provided output. Then compare the provided Tukey's familywise adjusted confidence interval to the previous result. How can you explain the difference?
+
+**The difference between nonforestedEast - nonforestedNorth in the Tukey is 30.52$kg/m^3$. The sign difference is because they were taking East - North, whereas above it was North - East. The previously reported confidence interval, translated into East - North, was 18 to 43. The tukey reported confidence interval  was from 11.719, 49.33. This confidence interval was wider because Tukey adjusts for multiple comparisons. The previous confidence interval was narrower because the error was not adjusted for these multiple comparisons. **
+
+```{r}
+emA <- emmeans(lmA, pairwise ~ Landf * AspectCat, adjust = "tukey")
+summary(emA)
+confint(emA)
+```
+
+5) Run `pwpm` on the emmeans version of the model with the Tukey's adjusted results. Use it to find the difference in the estimated mean for Forested West and Not Forested West and the Tukey's adjusted p-value for that difference. No other discussion, just use it to find those results. 
+
+**Difference in estimated mean: 5.77. P-value = 0.9988.**
+
+
+```{r}
+pwpm(emA)
+```
+
+
+6) The evidence drops for the potential interaction if we account for elevation and radiation (results provided below). We likely would drop the interaction in the following model. The additive version of the model is also provided and Tukey's HSD is provided for the `AspectCat` variable. Report a size interpretation for the North versus West aspects from the additive model (`lmB`).
+
+**North - West = -12.662 (-26.74, 1.41)**
+
+**For two otherwise similar sites but differ in aspect, the estimated mean snow density for the North aspect is 12.662$kg/m^3$ less than a West aspect. (95% CI: -26.74, 1.41)**
+
+
+```{r}
+lmA <- lm(density ~ Landf*AspectCat + rad + elev, data = snowdepthsR)
+Anova(lmA)
+
+lmB <- lm(density ~ Landf + AspectCat + rad + elev, data = snowdepthsR)
+Anova(lmB)
+
+emB <- emmeans(lmB, pairwise ~ AspectCat, adjust = "tukey")
+confint(emB)
+```
+## Logistic regression
+
+In the previous work, the missing values on snow density were removed because the locations did not have snow to measure. Let's consider the presence of snow as a response variable, something that might be of interest for a skier at this time of the year... To work with this, we need to go back to the full data set, `snowdepths`.
+
+7) Uncomment the provided templates for making a mosaic plot and a conditional density plots. Use the plots to make the appropriate display of the presence of snow both as a function of `elev` and `AspectCat` (two plots). Discuss the plot for the elevation predictor and whether this is what you might expect?
+
+```{r}
+snowdepths %>% 
+  ggplot() + 
+   geom_mosaic(aes(x = product(SnowPresence, AspectCat), fill = SnowPresence), offset = 0.02) + 
+   scale_fill_colorblind() + 
+   labs(title = "Mosaic plot of Aspect and Snow Presence")
+ 
+snowdepths %>% ggplot(aes(x = elev, fill = SnowPresence))  + 
+   geom_density(position='fill', bw =50) + #Add bw = option to avoid abstract art
+   scale_fill_colorblind()  + 
+   geom_rug(aes(col = SnowPresence, alpha = 0.1)) +
+   scale_color_colorblind() 
+
+ #Pick bandwidth (bw) to look "nice" (no white patches) but not smooth too much
+```
+
+8) Based on the provided results, complete writing out the estimated model, including using the results from the model and the previous plot(s) to define what a success is in the model:
+
+```{r}
+glm1 <- glm(SnowPresence ~ elev + AspectCat, data = snowdepths, family = binomial)
+glm1 %>% tbl_regression(intercept = T, exponentiate = F)
+plot(allEffects(glm1), grid = T, type = "response")
+```
+
+
+* $SnowPresence \sim Binomial(m = 1, \hat{\pi})$ where snow presence is a success.
+
+* $logit(\hat{\pi}\{SnowPresence|elev, AspectCat\}) = -17 + 0.01Elevation - 0.04 I_{AspectCat = North} -2.3 I_{AspectCat = South} -2.6 I_{AspectCat = West}$
+
+
+9) Report any resources outside your group and the course provided materials that you used and how they impacted your answers. Report NONE if there were none.
+
+**NONE**

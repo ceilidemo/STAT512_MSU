@@ -1,0 +1,182 @@
+---
+title: "HW 3"
+output:
+  word_document:
+    fig_height: 5
+    fig_width: 8
+date: "Due 2/7/2025"
+author: "No names - just add upon submission in gradescope"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+options(show.signif.stars = FALSE)
+
+library(ggplot2)
+library(ggthemes)
+library(tidyverse)
+library(car)
+library(effects)
+library(mosaic)
+library(remotes) #Needed for next two installs from github:
+
+#Re-comment this after running it once:
+#remotes::install_github("greenwood-stat/ggResidpanel")
+library(ggResidpanel)
+#remotes::install_github("greenwood-stat/catstats2")
+library(catstats2)
+library(gtsummary)
+library(lubridate)
+theme_set(theme_bw()) #Prevents need for + theme_bw() in ggplots
+```
+
+# HW 3 Instructions:
+
+* In groups of 2 to 4 (your choice of group members, but you must be in a group to complete the submission), complete the following questions. If you are having trouble identifying group members, post in the Water Cooler channel in MS Teams.
+
+Read Fabusova et al. (2024) and use the provided data set ("moths.xlsx") to answer the following questions.
+
+* Fabusova M, Gaston KJ, Troscianko J. 2024 Pulsed artificial light at night alters moth flight behaviour. Biol. Lett. 20: 20240403. https://doi.org/10.1098/rsbl.2024.0403
+
+
+The `Latency` (seconds) is the time to the moth starting to move after the treatment is applied or 10 seconds of dark for the control group. The treatment information is coded in three variables, `Treatment` with 5 levels (numbered unhelpfully as 1 to 5, shown with better labels once we figure out their meaning on the x-axis in Figure 2a) and also in `Colour` (cold or warm) and `Spectra` (LED or RGB - note that the LED level in this variable is the "Phosphor LED" and RGB level is the "RGB LED" in their Figure 2). 
+
+1) The following code reads in the data set from their published Excel file and removes the `Sunset_time` that we will not use. What is the sample size of moths before any cleaning? Then use `drop_na` to clean the data set to remove any missing observations across the following variables: Date, ID, Location, Treatment, Treatment_y_n, Colour, Spectra, Moon_Phase, Temp, Wind_speed_ms, Humidity, Common_name, Latin_name, Family, Sub_family, Latency, Erratic_behaviour. What is the sample size after that cleaning? 
+
+* Hint: The list above is provided so you can directly copy it into `drop_na`.
+
+  **Sample size before cleaning is 393 observations. Sample size after cleaning is 302 observations.**
+
+```{r}
+library(readxl)
+moth <- read_excel("moths.xlsx", 
+     sheet = "complete_dataset_MAIN FAMILIES.", 
+    na = "NA")
+
+library(lubridate)
+moth <- moth %>% 
+  mutate(Date = factor(ymd(Date))) %>% 
+  dplyr::select(-Sunset_time)
+
+dat <- moth %>% drop_na(Date, ID, Location, Treatment, Treatment_y_n, Colour, Spectra, Moon_Phase, Temp, Wind_speed_ms, Humidity, Common_name, Latin_name, Family, Sub_family, Latency, Erratic_behaviour)
+```
+
+
+2) Read their Methods section (mainly parts A and B). The `Treatment`, `Colour`, and `Spectra` variables tell an interesting story about the reason for some of the missingness in the original data set. Use `tally(Spectra ~ Colour | Treatment, data = moth)` to explore those variables and select the correct SINGLE response from these choices:
+
+a) The `Colour` and `Spectra` variables had missing values entered in order to remove outliers in the latency responses.
+
+b) The `Colour` and `Spectra` variables were missing for the level 5 of `Treatment` because the researchers failed to record what treatment level was applied to the moths in those rows.
+
+**c) The value 5 for the `Treatment` variable is a control group of moths that were not subjected to any light treatments, so they entered a missing value for the two levels of `Colour` and `Spectra`.**
+
+**Answer is bolded**
+
+```{r}
+tally(Spectra ~ Colour | Treatment, data = dat)
+```
+
+3) Improve the factor levels of the `Treatment` variable in your cleaned data set to match the meaning of the levels using `fct_recode` and also create a natural log-transformed version of the `Latency` variable for later use. No discussion, just code here.
+
+```{r}
+dat <- dat %>% mutate(Treatment = factor(Treatment),
+                      Treatment = fct_recode(Treatment,
+                                             "Cool Phosphor-coated" = "1",
+                                             "Warm Phosphor-coated" = "2",
+                                             "Cool RGB" = "3",
+                                             "Warm RGB" = "4"),
+                      log_Latency = log(Latency))
+```
+
+
+## Use the cleaned data set for all remaining questions on the HW:
+
+4) Using your improved labels for the `Treatment` variable, make a display of the `Latency` versus that grouping variable and then the logLatency versus that grouping variable. The second one should resemble their Figure 2b but be much more informative. What information does your _enhanced_ (hint!) display provide that is not presented in their version of the same plot?
+
+  **The _enhanced_ stripchart displays the individual observations which allows us to see clustering of points and possible data trends that we may not be able to see in the boxplot.**
+
+```{r}
+enhanced_stripchart(Latency ~ Treatment, data = dat) + 
+  labs(y = "Latency(seconds)")
+
+enhanced_stripchart(log_Latency ~ Treatment, data = dat) + 
+  labs(y = "Latency(log seconds)",
+       title = "Initial Response Latency")
+```
+
+5) Make a scatterplot of the logLatency versus the Humidity faceted by Treatment with linear and nonparametric smoothing lines. Discuss the potential for an interaction between Humidity and Treatment on log-Latency based on the plot.
+
+  **The smoothing lines are not the same across all treatment groups, suggesting a possible interaction between Humidity and Treatment on log-latency. This is especially noticible in the cool light sources.**
+
+```{r}
+dat %>% ggplot(mapping = aes(x = Humidity, y = log_Latency)) + 
+  geom_point(alpha = 0.5) + 
+  geom_smooth(method = "lm") + 
+  geom_smooth(col = "red", lty = 2, se = F) +
+  facet_wrap(~ Treatment) + 
+  scale_color_viridis(discrete = TRUE) +
+  labs(x = "Humidity", 
+       y = "Latency (log seconds)",
+       title = "Plot of Latency (log secs) versus Humidity, Faceted by Treatment")
+
+```
+
+
+6) Fit the interaction model with Humidity and Treatment for log-latency. Write out the estimated model. Make sure you define all your indicator variables and use the notation from this course.
+
+```{r}
+moth_model <- lm(log_Latency ~ Humidity * Treatment, data = dat)
+
+summary(moth_model)
+```
+
+
+$\hat{\mu}\{logLatency|Humidity \ast Treatment\} = -5.6 + 0.16Humidity + 5.04I_{Treatment=WarmPhosphor} + 11.5I_{Treatment=CoolRGB} + 1.5I_{Treatment=WarmRGB} - 0.099Humidity*I_{Treatment=WarmPhosphor} - 0.24Humidity*I_{Treatment=CoolRGB} - 0.015Humidity*I_{Treatment=WarmRGB}$
+
+where $I_{Treatment=WarmPhosphor}$ is 1 when treatment is Warm phosphor-coated LED and 0 if else, 
+$I_{Treatment=CoolRGB}$ is 1 when treatment is Cool RGB LED and 0 if else,
+$I_{Treatment=warmRGB}$ is 1 when treatment is Warm RGB LED and 0 if else.  
+
+
+
+7) The following work provides the simplified estimated models for two levels of the Treatment variable:
+
+* Cold phosphor: $\hat{\mu}\{logLatency|Humidity \ast Treatment\} = -5.6 + 0.16Humidity$
+
+* Cold RGB: $\hat{\mu}\{logLatency|Humidity \ast Treatment\} = 5.9 - 0.078Humidity$
+
+Which of the following is the correct "size" interpretation (CIs are a topic for later - leave them as ellipses) for the 0.16 estimated slope coefficient for Humidity, assuming that this was the relative humidity they were using which is a percentage. Pick ONE - no discussion.
+
+a) A one percent increase in relative humidity causes the estimated mean log-latency time to change by 0.16 log-seconds, controlled for treatment (95% CI of ... to ...).
+
+b) For two otherwise similar moths but that had observed times that differed in relative humidity by 1 percent, the one measured during higher relative humidity had a higher estimated mean log-latency time by 0.16 log-seconds than the less humid observation, controlled for treatment (95% CI of ... to ...).
+
+c) A one percent increase in relative humidity causes the estimated mean log-latency time to change by 0.16 log-seconds for an observation with a cold phosphorous light (95% CI of ... to ...).
+
+**d) For two otherwise similar moths but that had observed times that differed in relative humidity by 1 percent, the one measured during higher relative humidity had a higher estimated mean log-latency time by 0.16 log-seconds than the less humid observation for an observation with a cold phosphorous light (95% CI of ... to ...).**
+
+**Answer is bolded**  
+
+8) Drop the interaction from the model and re-fit it. Make an effects plot for the model. Write a size interpretation for the `humidity` slope coefficient from that model, making sure you find and include the 95% CI in parentheses in the size interpretation.
+
+```{r fig.width = 12, fig.height = 8}
+moth_model2 <- lm(log_Latency ~ Humidity + Treatment, data = dat)
+summary(moth_model2)
+confint(moth_model2, level = 0.95)
+
+plot(allEffects(moth_model2))
+```
+
+$\hat{\mu}\{logLatency|Humidity + Treatment\} = -1.69 + 0.077Humidity + 0.63I_{Treatment=WarmPhosphor} + 0.65I_{Treatment=CoolRGB} + 0.84I_{Treatment=WarmRGB}$
+
+where $I_{Treatment=WarmPhosphor}$ is 1 when treatment is Warm phosphor-coated LED and 0 if else, 
+$I_{Treatment=CoolRGB}$ is 1 when treatment is Cool RGB LED and 0 if else,
+$I_{Treatment=warmRGB}$ is 1 when treatment is Warm RGB LED and 0 if else.  
+
+**For two otherwise similar moths but that had observed times that differed in relative humidity by 1 percent, the one measured during higher relative humidity had a higher estimated mean log-latency time by 0.08 log-seconds than the less humid observation, controlled for treatment (95% CI of -0.01 to 0.16).**
+
+
+9) Document any collaborations or pertinent discussions with other students or resources outside of your group and the resources that I am providing and the _Sleuth_ that you used to complete this assignment *or report that you did not have any*. If you used generative AI (chatGPT, Bard, etc.), report which question(s) and how/what you asked for.
+
+  * **NONE**

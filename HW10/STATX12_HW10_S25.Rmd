@@ -1,0 +1,129 @@
+---
+title: "X12 HW 10"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+options(show.signif.stars = FALSE)
+
+library(ggplot2)
+library(ggthemes)
+library(tidyverse)
+library(car)
+library(effects)
+library(janitor)
+library(readxl)
+library(catstats2)
+library(mosaic)
+library(ggResidpanel)
+library(easyalluvial)
+library(mi)
+library(MuMIn)
+library(ggmosaic)
+library(gtsummary)
+theme_set(theme_bw())
+```
+
+
+# Odds ratios and Logistic regression
+
+Read Ashley et al. (2016) available at https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0159878
+
+* Focus on the progression after 80 weeks binary response variable and results related to it that are reported in Table 2.
+
+* Individual or in groups of 2 to 4, complete the following. **A 3% bonus if you work in a group - report that this was a group submission in the last question (no names, just the number in the group that submitted together). You can also cite other students that you did not submit the assignment with but did discuss answers, but that will not get you a bonus.**
+
+**1) We used their suggested cutoff for NACA in row 9 of Table 2 to create a new binary variable (below/above 17976.83). What percent of the subjects are below 17976.83 on NACA? **
+
+```{r}
+d1 <- read_excel("ashley.XLSX")
+summary(d1$NACA)
+d1 <- d1 %>% mutate(NACAF = factor(ifelse(NACA<17976.83, "low", "high")))
+d1$NACAF <- relevel(d1$NACAF, "low")
+summary(d1$NACAF)
+```
+
+
+
+
+**2) The code provides a contingency table of above/ below the NACA cutoff and the response of `Progression_Event`. Use that table to estimate and report the odds of progression at 80 weeks in the high and low NACA groups (so report two different odds of progression (make sure to include the "_to 1_" in each)).**
+
+* Note that in `Progression_Event`, the 0s are the "non-progressors" and "progressors" are the 1's. Table 1 has enough detail to verify the logical coding of the `Progression_Event` variable to have a 1 as a "success" in their coding.
+
+```{r}
+tally(~NACAF+Progression_Event, data=d1)
+```
+
+
+**3) Use the previous results to estimate the odds ratio of progression between the NACA defined groups and include the result in the following sentence. Hint: this will match the reported results in the "Unadjusted OR" column. Show your work. The mosaic plot is provided to help you with understanding the situation. No CI yet.**
+
+* For two similar subjects, but that differ on their NACA level, the estimated (mean) odds of progressing in the high NACA group are XXXX times higher than in the low NACA group.
+
+
+
+```{r}
+plot1 <- d1 %>%
+  ggplot() +
+  geom_mosaic(aes(x = product(NACAF), fill = Progression_Event), offset = 0.02) +
+  scale_fill_viridis_d(end = 0.8, option = "E")
+
+plot1
+```
+
+**4) Use the logistic regression model fit below to obtain the same result and an associated 95% confidence interval. Work with the correct coefficient to get the same estimated OR as in the previous question and its CI (the CI may not match their reported result). Show your work. No discussion - just extract and label the answers.**
+
+```{r}
+glm1 <- glm(Progression_Event ~ NACAF, data= d1, family=binomial)
+summary(glm1)
+confint(glm1)
+```
+
+**5) Now that you have matched the results in the "Unadjusted" situation with the logistic regression model, we can try to match their "Adjusted" inferences. Adjusted models contain `Age`, smoking status (code to rename to `Smoke` below), gender (variable is called `Male`), baseline FVC (`FVC_predicted_percent`), and DLCO (`DLCO_predicted_percent`) predicted percentages. In the check for missing data on the combination of these variables, we lose a few observations. Report the total sample size and as in `d1R` that will be used for the "adjusted" model that contains these predictors.**
+
+
+```{r}
+d1 <- d1 %>% mutate(Male = factor(Male))
+names(d1)[6] <- 'Smoke'
+d1 <- d1 %>% mutate(Smoke = factor(Smoke))
+
+d1 %>% dplyr::select(Age, Smoke, Male, FVC_predicted_percent, DLCO_predicted_percent, NACAF, Progression_Event) %>% as.data.frame() %>% missing_data.frame() -> formissingplot
+
+image(formissingplot)
+
+d1R <- d1 %>% drop_na(Age, Smoke, Male, FVC_predicted_percent, DLCO_predicted_percent, NACAF, Progression_Event)
+
+```
+
+
+**6) Fit a logistic regression model containing those components to create the "adjusted" model with the NACAF binary predictor. Make effects plots on both the link and response scales - do not include partial residuals in the plots. No discussion.**
+
+```{r fig.width = 12, fig.height = 12}
+
+```
+
+
+**7) Report an evidence sentence for the NACAF predictor in the previous model.**
+
+
+
+**8) Report a size interpretation for `NACAF` on the odds scale (you will need to use `confint` and maybe do some calculations to include a 95% CI, noting that this result might not match the one in the paper). Be prepared for some warning messages - you can comment out the line of code after you extract the result from it).**
+
+```{r}
+
+
+```
+
+* For two similar subjects, but that differ on the level of their NACA, the estimated mean odds of ... are ... times higher if the subject is in the ... group than if the subject is in the ... group (95% profile likelihood CI: ... to ...) controlling for ....
+
+
+**9) There is something undesirable happening in the previous model that is highlighted in the effects plots. What is it? Make a contingency table and plot of progressing/not vs the smoking status. What does this tell you? (Note: The undesirable thing we're looking for in your answer is not the extremely wide 95% confidence bands or intervals, though this issue is related.)**
+
+
+```{r}
+
+```
+
+
+**10) Document any outside resources used or students that you had substantive discussions with but turned in separate assignments. Note if this was a group assignment or you completed it individually (no names, just the group size as 1 for individual or indicate the total count in your group).**

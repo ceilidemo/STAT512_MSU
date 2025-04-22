@@ -1,0 +1,122 @@
+---
+title: "HW 8"
+output:
+  word_document:
+    fig_height: 5
+    fig_width: 8
+date: "Due April 7"
+author: "No name needed"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+options(show.signif.stars = FALSE)
+
+library(ggplot2)
+library(ggthemes)
+library(tidyverse)
+library(car)
+library(effects)
+library(mosaic)
+library(ggmosaic)
+library(remotes) 
+
+library(ggResidpanel)
+library(catstats2)
+library(gtsummary)
+library(lubridate)
+library(patchwork)
+library(MuMIn)
+library(lmerTest)
+library(cetcolor)
+library(ggrepel)
+library(easyalluvial)
+library(emmeans)
+theme_set(theme_bw()) #Prevents need for + theme_bw() in ggplots
+```
+
+# HW 8 Instructions:
+
+* This is a group assignment, between 2 and 4 students, self-selected.
+
+Continuing with Fabusova et al. (2024) and the provided data set ("moths.xlsx") to write a statistical report to answer the following research question.
+
+* Fabusova M, Gaston KJ, Troscianko J. 2024 Pulsed artificial light at night alters moth flight behaviour. Biol. Lett. 20: 20240403. https://doi.org/10.1098/rsbl.2024.0403
+
+```{r}
+library(readxl)
+moth <- read_excel("moths.xlsx", 
+     sheet = "complete_dataset_MAIN FAMILIES.", 
+    na = "NA")
+
+library(lubridate)
+moth <- moth %>% mutate(Date = factor(ymd(Date))) %>% dplyr::select(-Sunset_time)
+
+moth2 <- moth %>% drop_na(Date, ID, Location, Treatment, Treatment_y_n, Colour, Spectra, Moon_Phase, Temp, Wind_speed_ms, Humidity, Common_name, Latin_name, Family, Sub_family, Latency) #Slight change from prior HW to keep more observations!
+
+moth2 <- moth2 %>% mutate(Treatment = fct_recode(factor(Treatment),
+                                                 "Cold Phosphor" = "1",
+                                                 "Warm Phosphor" = "2",
+                                                 "Cold RGB" = "3",
+                                                 "Warm RGB" = "4"), 
+                          logLatency = log(Latency),
+                          Colour = factor(Colour),
+                          Spectra = factor(Spectra),
+                          Family = factor(Family))
+```
+
+Note: Use `moth2` for the remaining questions.
+
+* Address the effects of the colour and light spectra (and possible interaction) on loglatency time of the moths to move, controlling for the family of the moths. Note: Your RQ should re-word this general goal to talk about what the interaction means here and **not use the word "interaction"** in stating the RQ.
+
+* Retain the interaction of colour and spectra in the model, but make sure you report the test related to that part of the model and note that evidence was _moderate_ related to it. Write out the estimated model and include a nice-looking table of the estimated model.
+
+* Make sure you assess/report the evidence related to family in the model, but regardless of that result retain it in the model because of the repeated measures being taken on moths from the same family. The provided Type III test provides a test for "Family" conditional on the other main effects and interaction in the model.
+
+* Perform Tukey's pairwise comparisons on the combinations of colour and spectra in that model and generate a CLD from the Tukey's adjusted pairwise comparisons. Use those results to discuss the pattern of detected/not detected differences and report one "size" interpretation using the Tukey's adjusted CI for a pair of interest to you. This should also be related back to the discussion of the effects plots. Make a nice looking table of the Tukey's results you discuss.
+
+* Remember to discuss potential violations of independence for this model (we've discussed things that are not being incorporated in this model that might qualify for this) and other pertinent assumptions, R-squared, as well as the sample size and whether it is a balanced design or not for the variables being considered.
+
+* Table 1 here should be a summary of logLatency by combinations of Spectra and Colour.
+
+* Data visualizations: Include and discuss the provided interaction plot and make a plot of the response versus the Family and discuss that. The alluvial diagram provided is useful for discussing the design of the study.
+
+* Note: This will be using a linear model with family of the moths as a fixed effect in the model, with the starting point for the work provided below.
+
+```{r}
+moth2 %>% dplyr::select(Colour, Spectra, Family) %>% alluvial_wide(fill_by = "last_variable")
+tally(Spectra ~ Colour|Family, data = moth2)
+
+ggintplot(response = "logLatency", groupvars = c("Colour", "Spectra"), data = moth2)
+
+enhanced_stripchart(logLatency ~ Family, data = moth2) + labs(y = "Latency time (log seconds)")
+
+lm1 <- lm(logLatency ~ Colour*Spectra + Family, data = moth2)
+summary(lm1)
+lm1 %>% tbl_regression(intercept = T)
+Anova(lm1, type = "III")
+resid_panel(lm1, "R")
+
+plot(allEffects(lm1, residuals = T), lwd = 2, band.transparency = 0.1, residuals.pch = 14)
+
+emA <- emmeans(lm1, pairwise ~ Colour * Spectra, adjust = "tukey")
+summary(emA)
+confint(emA)
+
+```
+
+```{r}
+model_diagram 
+
+dplyr :: left_join() ##keeps observations in x 
+```
+
+Citations:
+
+* In your citations section, you can add a note to document any collaborations or pertinent discussions with other students. Any resources, including generative AI, Statistical Sleuth, my course notes, and any important R packages need to be cited. You should have a good start on this from HW 5 but might need to add or delete some from that prior work. Make sure you cite R and R packages in the text as well as including the details in the citation section.
+
+Submission: 
+
+* Include your up to 4 page, double-spaced text report, then the Figures, Tables, and Citations sections patched together with the PDF of your knitted Rmd work in one file in Gradescope. One submission per group of up 4 students.
+

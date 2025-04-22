@@ -1,0 +1,205 @@
+---
+title: "Lab 8"
+output:
+  word_document:
+    fig_height: 5
+    fig_width: 8
+date: ""
+author: "Jada Zorn, Ricardo Javier Leiton Cubillo"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+options(show.signif.stars = FALSE)
+
+library(ggplot2)
+library(ggthemes)
+library(tidyverse)
+library(car)
+library(effects)
+library(readxl)
+library(mosaic)
+library(catstats2)
+library(ggResidpanel)
+library(easyalluvial)
+library(emmeans)
+library(patchwork)
+library(plotly)
+library(gtsummary)
+library(modelsummary)
+library(ggmosaic)
+library(ggrepel)
+library(cetcolor)
+library(MuMIn)
+library(lmerTest)
+theme_set(theme_bw()) #Prevents need for + theme_bw() in ggplots
+```
+
+
+# Rules
+
+In groups of 2 or 3, complete the following.
+
+# Modeling Snow Density
+
+We will be using the data set from Wetlaufer, Hendrikx, and Marshall (2016) - study where they explored the relationship between snow density ($kg/m^3$) or snow depth (`snow`, mm) or snow water equivalent (SWE, mm) with a suite of predictor variables. In this lab we will condition on there being snow present and then try to model snow density with models that will compete with what they discuss in Tables 3 and 4. We will be interested in using `elev` (Elevation, m), `Land` (forest cover with 0 = unforested and 10 = forested), `rad` (Potential Solar radiation, $Wh/m^2$),  `curvature` (see https://blogs.esri.com/esri/arcgis/2010/10/27/understanding-curvature-rasters/ for a description), `aspect` (orientation of slope in degrees (0 to 360 degrees)), and `angle` (angle of slope in degrees with 0 being flat) as predictors. Also pay attention to the `strata` variable (read its definition in the paper) and the role that played in the data collection and should in the analysis, as we will revisit this.
+
+* Wetlaufer, K., Hendrikx, J., and L. Marshall (2016) Spatial Heterogeneity of Snow Density and Its Influence on Snow Water Equivalence Estimates in a Large Mountainous Basin. _Hydrology_, 3(1):3, doi:10.3390/hydrology3010003. Available at http://www.mdpi.com/2306-5338/3/1/3/htm  and on D2L
+
+
+Run the following code to get re-started with the data set.
+
+```{r fig.width=8, fig.height=4}
+data(snowdepths)
+snowdepths <- snowdepths %>%
+  mutate(AspectCat = factor(case_when(
+    aspect %in% (0:45)~ "North",
+    aspect %in% (315:360)~ "North",
+    aspect %in% 45:(90+45) ~ "East",
+    aspect %in% (90+45):(180+45) ~ "South",
+    aspect %in% (180+45):315 ~ "West"
+  )),
+  SnowPresence = factor(case_when(
+    snow == 0 ~ "None",
+    snow > 0 ~ "Some"
+  )),
+  Landf = factor(cover),
+  Landf = fct_recode(Landf,
+                     "Not Forested" = "0",
+                     "Forested" = "10")
+  )
+
+snowdepthsR <- snowdepths %>% drop_na(density)
+lmA <- lm(density ~ rad + snow + elev + AspectCat, data = snowdepthsR)
+lmDepth <- lm(density ~ snow, data = snowdepthsR)
+lmSWE <- lm(density ~ swe, data = snowdepthsR)
+lmC <- lm(density ~ snow + swe, data = snowdepthsR)
+lmElev <- lm(density ~ elev, data = snowdepthsR)
+lmRad <- lm(density ~ rad, data = snowdepthsR)
+lmSlope <- lm(density ~ angle, data = snowdepthsR)
+lmER <- lm(density ~ elev + rad, data = snowdepthsR)
+lmDR <- lm(density ~ snow + rad, data = snowdepthsR)
+lmmeanonly <- lm(density ~ 1, data = snowdepthsR)
+lmFull <- lm(density ~ elev + rad + snow + angle + AspectCat, data = snowdepthsR)
+d1 <- model.sel(list(lmDepth, lmElev, lmRad, lmSlope, lmER, lmDR, lmFull, lmmeanonly), rank = "AIC")
+d1
+ggdredgeplot(d1)
+```
+
+
+
+**1) The following effects plot with partial residuals is modified so the plot options to work a bit better with large data sets. Use the provided plot to assess the linearity assumption as it relates to elevation and snow depth in the provided model.**
+
+From the provided effects plot it looks like there is evidence against the linearity assumption, particularily in the snow depth plot. The smoothing line does not track the linear fit line, and instead shows a quadratic relationship. 
+
+```{r fig.width = 12, fig.height = 12}
+plot(allEffects(lmFull, residuals = T), residuals.color = "darkgrey", lwd = 2, band.colors = "red", band.transparency = 0.1, residuals.pch = 16, residuals.cex = 0.1)
+
+```
+
+
+2) Regardless of your assessments of linearity in the previous model, consider the following three models to add to the previous model selection results. After adding those to the `model.sel` AIC comparisons provided above, what do you discover? Write up a couple of sentences to summarize the top model and its evidence versus other top models and what that suggests about the need for the two quadratic versions of the polynomial terms here.
+
+According to model select and dredge plot, the top model is lmFull2. This model includes two polynomial terms for elevation and snow depth, along with the other variables of radiation, angle, and aspectcat. It has the lowest AIC value of 8205.2, and the second next model has a delta AIC of 10, which strongly supports this as the best model. 
+
+```{r}
+lmFulle2 <- lm(density ~ poly(elev,2) + rad + snow + angle + AspectCat, data = snowdepthsR)
+lmFulls2 <- lm(density ~ elev + rad + poly(snow,2) + angle + AspectCat, data = snowdepthsR)
+lmFull2 <- lm(density ~ poly(elev,2) + rad + poly(snow,2) + angle + AspectCat, data = snowdepthsR)
+
+d2 <- model.sel(list(lmDepth, lmElev, lmRad, lmSlope, lmER, lmDR, lmFull, lmmeanonly, lmFulle2, lmFulls2, lmFull2), rank = "AIC")
+d2
+ggdredgeplot(d2)
+```
+
+
+3) We started writing out the model with both elevation and snow depth as quadratic polynomials. Complete the redacted part of writing out the estimated model.
+
+
+
+* $\hat{\mu}\{density|radiation, angle, AspectCat, poly(elev,2), poly(snow,2)\} = 227 - 581 elev^\ast - 180 {elev^\ast}^2 + 0.0004471rad - 132 snow^\ast + 413 {snow^\ast}^2 - 0.53 Angle - 7.5 I_{AspectCat = North} - 0.69I_{AspectCat = South} + 10 I_{AspectCat = West}$
+
+* where $elev^\ast$, ${elev^\ast}^2$, $snow^\ast$, and ${snow^\ast}^2$ are orthogonal polynomials of the original elevation and snow depth predictors and where $I_{AspectCat = North}$ is 1 for a north facing slope location and 0 otherwise, $I_{AspectCat = South}$ is 1 for a south facing slope location and 0 otherwise, and $I_{AspectCat = West}$ is 1 for a west facing slope location and 0 otherwise,
+
+
+```{r}
+lmFull2 %>% tbl_regression(intercept = T)
+summary(lmFull2)
+```
+
+
+4) The quadratic term for snow depth is extracted using the number of its panel from the suite of all the effects plots from the full model with two quadratic polynomial terms so you can focus on it. Write a size interpretation sentence for this term in this model. Use the grid lines to help with the discussion (you should discuss values of the estimated response and how they change across the range of the predictor). Make sure you use your knowledge of the units of the predictor and response in the interpretation. No CI reporting is done for polynomial size interpretations.
+
+
+At a snow depth of 0$mm$, the estimated mean snow density is about 360$kg/m^{3}$. As snow depth increases to around 100$mm$, estimated mean density decreases to around 300$kg/m^{3}$. As depth continues to increase, snow density then begins to increase. At a snow depth of 3000$mm$, we then have an estimated mean snow density of around 460$kg/m^{3}$. 
+
+
+```{r fig.width = 8, fig.height = 8}
+plot(allEffects(lmFull2), grid = T, 3)
+```
+
+5) A variable we have not considered much so far is whether the location had trees or not (forested/not), which is available in the `cover` variable in the original data set. Review the provided data wrangling code from the start of the lab to find a better version of that variable and note what changed about the variable besides its name. 
+
+The data wrangling code from the beginning of the lab created a new variable named "Landf", which took the cover variable and changed it into a factor. These values were also recoded to show "0" as "Not Forested" and "10" and "Forested. The end result was a categorical variable named "Landf" with two categories of "Nor Forested" and "Forested". 
+
+```{r}
+summary(snowdepthsR$Landf)
+
+#Landf = factor(cover),
+ #Landf = fct_recode(Landf,
+                     #"Not Forested" = "0",
+                     #"Forested" = "10")
+```
+
+6) Using `snowdepthsR`, make a contingency table of counts of the improved version of `cover` and `AspectCat`. Is this a balanced design with respect to these two variables? What combinations had the smallest and largest counts?
+
+This is not a balanced design with respect to these two variables as the count combinations were not equal throughout. West Forested areas had only 21 observations, but East Non-Forested areas had 176. 
+
+```{r}
+tally(AspectCat ~ Landf, data = snowdepthsR)
+```
+
+7) Make an interaction plot with `ggintplot` and discuss the pattern of a potential interaction, making sure you use the words "estimated mean snow density" at least once. Based on the plots, do you think you will find evidence that there is an interaction present? Why or why not?
+
+Looking at the two-way interaction plots, we think that we will find evidence of an interaction as the changes in estimated snow density do not seem to be the same for different groups. Looking at the bottom right plot, lines connecting estimated mean densities for aspect slope categories are not parallel to each other, suggesting that there may be an interaction between aspect and landF on density. We can also see this in the top left plot, with changes in estimated mean density differing for forested and non forested plots. 
+
+```{r}
+ggintplot(response = "density", groupvars = c("AspectCat", "Landf"), data = snowdepthsR)
+
+```
+
+
+8) Because the sampling design involved stratified random sampling, the `strata` (see paper for definition) constitute a blocking or grouping variable that should be included in the model to avoid violating the independence assumption. The following plot explores the density responses versus the strata and the `tally` result helps with counting. How many levels of strata are there? If you added strata to the linear model, how many indicator variables would it create? Is this a balanced design with respect to strata? 
+
+There are 31 levels of strata. If we added this into the linear model we would see 30 indicator variables, as one of them would be set at the baseline. This is not a balanced design with respect to strata as some strata only have 2-3 observations, while others have up to 124.
+
+```{r}
+enhanced_stripchart(density ~ strata, data = snowdepthsR) + ylim(c(150,500))
+tally(~strata, data = snowdepthsR)
+```
+
+9) Because we really do not care too much about differences in strata but need to account for it, we usually treat this sort of blocking variable with lots of levels as a random effect and fit a linear mixed model. The following code uses `lmerTest` to fit a `lmer` (pronounced el-mer or (my preference) lee-mer) with the previously explored aspect and forested variables and their interaction as fixed effects and strata as a random effect. The `Anova(..., test.statistic = "F")` code generates an F-test for the fixed effects with the previous rules based on "types" of F-tests that are also _conditional on the random effects in the model_. Complete the evidence sentence for the interaction in the provided model.
+
+```{r}
+lmerA <- lmer(density ~ Landf*AspectCat + (1|strata), data = snowdepthsR)
+Anova(lmerA, test.statistic = "F")
+```
+
+* There is some evidence against the null hypothesis of no interaction between land cover and aspect on the snow density ($F_{3,778.63} = 2.7288, p-value = 0.043), controlled for strata as a random effect, so we would conclude that there is evidence of an interaction between land cover and aspect on snow density and keep the interaction in the model.
+
+
+10) The following results are from the linear model where we do not account for strata. Report the test statistic, distribution under the null, and p-value for the interaction in this model. How can you explain the difference in this result as compared to the previous mixed model result?
+
+
+```{r}
+lmA <- lm(density ~ Landf*AspectCat, data = snowdepthsR)
+Anova(lmA)
+```
+
+In the interaction model, there is strong evidence against the null hypothesis of no interaction between land cover and aspect on the snow density ($F_{3,785} = 6.0167, p-value = 0.0004). This differs from the results of the mixed model because the linear model does not account for the variability that comes from strata. The mixed model treats strata as a random effect, which adjusts for the variability that comes from different strata. The linear model, which does not account for this variability, thus shows a much smaller p-value of 0.0004, inflating the term. By not accounting for strata, the linear model may mis-estimate the evidence for the interaction. 
+
+
+11) Report any resources outside your group and the course provided materials that you used and how they impacted your answers. Report NONE if there were none.
+
+NONE

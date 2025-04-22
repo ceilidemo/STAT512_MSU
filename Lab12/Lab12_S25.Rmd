@@ -1,0 +1,268 @@
+---
+title: "Lab 12"
+output:
+  word_document:
+    fig_height: 5
+    fig_width: 8
+date: "4/14/25"
+names: "Ricardo Leiton, Trenton Wolfe, Ben Patterson, Ceili DeMarais"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+options(show.signif.stars = FALSE)
+
+library(ggplot2)
+library(ggthemes)
+library(tidyverse)
+library(car)
+library(effects)
+library(readxl)
+library(mosaic)
+library(remotes)
+library(ggResidpanel)
+library(easyalluvial)
+library(emmeans)
+library(patchwork)
+library(plotly)
+library(gtsummary)
+library(lme4)
+library(nlme)
+library(lmerTest)
+library(catstats2)
+library(qqplotr)
+webshot::install_phantomjs(force = T)
+theme_set(theme_bw()) #Prevents need for + theme_bw() in ggplots
+```
+
+
+# Rules
+
+In groups of 2 to 4, mostly as assigned in class, complete the following questions.
+
+# Previous data wrangling:
+
+
+```{r}
+GripStrengthMeasurements <- read_excel("GripStrengthMeasurementsS25.xlsx")
+GS <- GripStrengthMeasurements %>% drop_na(GripStrength) #Mostly cleans out empty rows
+
+GS2 <- GS %>% drop_na(Arm)
+GS2 <- GS2 %>% mutate(Arm = forcats::fct_collapse(Arm,
+                                                Up = c("Up", "up"),
+                                                Down = c("Down", "down"),
+                                                "90" = c("90", "90 degree")),
+                    SubjectID = forcats::fct_collapse(SubjectID,
+                                          MDEarl = c("MDEarl","MDEar")),
+                    Arm = factor(Arm),
+                    Hand = factor(Hand),
+                    OrderF = factor(Order)
+)
+
+GS2 <- GS2 %>% mutate(Hand.Arm = factor(str_c(Hand, Arm)))
+
+GS2 <- GS %>% drop_na(Arm)
+GS2 <- GS2 %>% mutate(Arm = forcats::fct_collapse(Arm,
+                                                Up = c("Up", "up"),
+                                                Down = c("Down", "down"),
+                                                "90" = c("90", "90 degree")),
+                    SubjectID = forcats::fct_collapse(SubjectID,
+                                          MDEarl = c("MDEarl","MDEar")),
+                    Arm = factor(Arm),
+                    Hand = factor(Hand),
+                    OrderF = factor(Order)
+)
+```
+
+
+
+## Part II from Lab 11 with new numbers: Merging (`left_join`-ing) the demographics data
+
+The following code will read in and (eventually) join the demographics data.
+
+```{r}
+dim(GS2)
+Demographics <- read_excel("DemographicsS25.xlsx")
+Demographics <- Demographics %>% dplyr::select(-c(12:13)) #Because of a "note" left in column 13...
+dim(Demographics)
+```
+
+**1) The following code highlights a potential issue with one of the subject IDs. Fix the problem in the Demographics data.frame using R code.**
+
+
+```{r}
+data.frame(sort(unique(GS2$SubjectID)), sort(unique(Demographics$SubjectID)))
+which(sort(unique(GS2$SubjectID)) != sort(unique(Demographics$SubjectID)))
+
+# Fix the problem in Demographics to match GS2:
+Demographics <- Demographics %>% mutate(SubjectID = 
+                                          forcats::fct_recode(SubjectID, LADeathGrips = "LADeath"), 
+                                        SubjectID = 
+                                          forcats::fct_recode(SubjectID, CenntenialWarriors = 
+                                                                "CentennialWarriors"))
+
+#Check that problem was fixed:
+data.frame(sort(unique(GS2$SubjectID)), sort(unique(Demographics$SubjectID)))
+```
+
+
+```{r}
+
+Demographics <- Demographics %>% mutate(Weights = factor(Weights),
+                                        GripTesterID = factor(GripTesterID))
+
+Demographics <- Demographics %>% mutate(Weights = fct_collapse(Weights,                                                              no = c("no",  "No"),
+               yes = c("yes", "Yes")))
+
+#Join Demographics to the GS2 repeated measures data
+combined <- left_join(x = GS2, y = Demographics, by = "SubjectID")
+
+combinedR <- combined %>% drop_na()
+
+combinedR <- combinedR %>% mutate(forearm_bins   = 
+                                    factor(cut_number(ForearmLength, n = 3)),
+                                  epworth_bins = 
+                                    factor(cut_number(Epworth, n = 3)),
+                                  balance_bins = 
+                                    factor(cut_number(BalanceTime, n = 3))
+                                  )
+dim(combinedR)
+dim(combined)
+dim(GS2)
+tally(~SubjectID, data = combinedR)
+```
+
+**2) What is the sample size before and after the `left_join`? How many subjects are in the data set as analyzed in `combinedR`?**
+
+Sample size was 263 before left_join and 263 after. The combinedR group had the NAs removed after join which lowered the sample size to 257. There are 44 unique subjects in the dataset in CombinedR. 
+
+```{r}
+unique(combinedR$SubjectID)
+dim(combinedR)
+dim(combined)
+dim(GS2)
+```
+
+**3) Now we can incorporate forearm binned variables into the model using the `forearm_bins`, which we will treat as a fixed effect. Make a `model_diagram` from the provided model (I like to add the option of `heightVal = 800`) and explain/discuss the location of the fixed effects in it.**
+
+Hand, Arm, and Hand:Arm are located at the top of the right column of the model diagram. This is because these are indicated at the observation level, not the subject level. The 6 observations per individual are a combination of hand and arm. The forearm bins are located in the left column as they are splitting the individuals into groups based on their forearm size, as a proxy for height. These groups were then split down into the 6 hand and arm observations per individual. 
+
+
+```{r fig.width = 12, fig.height = 12}
+combinedR <- combinedR %>% mutate(
+                forearm_bins = fct_recode(forearm_bins,
+                                       low = "[9.25,10]",
+                                       medium = "(10,11]",
+                                       high = "(11,13.1]")
+            )
+lmer2 <- lmer(GripStrength ~ Hand*Arm + forearm_bins + (1|SubjectID), data = combinedR)
+
+model_diagram(lmer2, heightVal = 800)
+```
+
+
+**4) The following provides the theoretical and estimated fixed effect part of the model, except does not add the subscripts for the fixed effects or define the distributions of the random effects (see all locations with `?`). Add the definition of the random effects and subscripts in the appropriate places based on the previous model diagram.**
+
+```{r}
+lmer2 %>% tbl_regression(intercept = T)
+```
+
+* Theoretical model: $GripStrength_{ij} = \mu_{ij} + Subject_i + \epsilon_{ij}$ 
+
+    - where $Subject_i \sim N(0,\sigma^2_{subject})$ and $\epsilon_{ij} \sim N(0, \sigma^2_\epsilon)$ and $i = 1, ..., I$ subjects and $j = 1, ..., n_i$ for the $j^{th}$ observation on the $i^{th}$ subject.
+    
+* Estimated model for $\mu_{ij}$: 
+
+    - Result: $\hat{\mu}_{ij} = 47 - 3.7I_{Hand = ND, ij} + 0.25I_{Arm = Down, ij} + 2.0I_{Arm = Up, ij} + 12 I_{forearmbins = medium,i} + 35I_{forearm_bins = high, i} + 1.4I_{Hand = ND, ij} I_{Arm = Down, ij} + 1.5 I_{Hand = ND, ij} I_{Arm = Up, ij}$
+
+
+
+## Part 2 (all new questions): Summarizing/exploring mixed models
+
+In mixed models, the random effect variances create some extra opportunities and challenges when trying to summarize the model. The following models will also incorporate the `GripTesterID` so we can control for differences in the different machines used.
+
+First, the random effects can be used to calculate the intra-class correlation (ICC) as discussed on page 16 of the Mixed Models Part A notes.
+
+**5) For the model `lmer3` below, report the estimated subject variance and estimated residual variance.**
+
+```{r}
+lmer3 <- lmer(GripStrength ~ Hand*Arm + forearm_bins + GripTesterID + (1|SubjectID), data = combinedR)
+
+summary(lmer3)
+```
+
+* $\hat{\sigma}_{subject}^2 = 258.08$
+
+* $\hat{\sigma}_{\epsilon}^2 = 25.53$
+
+
+**6) Use the two variances to calculate the estimated ICC. Show your work.**
+
+* Estimated ICC = 258.08 / (258.08 + 25.53) = 0.91
+
+
+**7) Interpret the ICC result in a sentence as you would in a report and then write a sentence to discuss what this suggests about repeated measures on grip strength (something about what the ICC suggests).**
+
+Once we account for grip tester, arm position, hand dominance, and forearm length, the estimated correlation of the two grip strength measurements is 0.91. This indicates high correlation between two observations once we account for systematic changes across subjects. 
+
+**8) We can also explore the estimates for each subject on the random subject effect. These are not to be used to do inferences for differences, but we can qualitatively explore the variability. You can print out the subject random effect estimates using `ranef(modelname)` or you can plot the results with estimates of the uncertainty using `dotplot(ranef(modelname, postVar = T))` or  you can make a QQ-plot to use for assessing normality of a single random effect using the provided code. _Fix the title on the QQ-plot_, then find a subject of interest to you in the caterpillar plot, note their ID, and discuss their random effect estimate relative to other subjects.**
+
+LACROIX's grip strength is roughly 35 pounds lower than average from the other subjects. Their respective grip strength is roughly 5 pounds lower than the next subject, AustinLion's, strength measurement. 
+
+
+```{r fig.height = 8}
+ranef(lmer3)
+library(lattice)
+dotplot(ranef(lmer3, postVar = T))
+as.data.frame(ranef(lmer3)) %>% ggplot(aes(sample = condval)) +
+  stat_qq_point(alpha = 0.6) +
+  stat_qq_line() + theme(aspect.ratio = 1) +
+  labs(x = "Theoretical Quantiles",
+       y = "Sample Quantiles",
+       title = "QQ-plot of random intercept of subject") +
+  coord_fixed()
+```
+
+
+**9) Calculate and write two sentences to report the two R-squared results for `lmer3`. Be specific about the contents of the model in reporting the results.**
+
+The fixed effects of forearm length, hand, arm, and grip tester explain 50.7% of the variation in the grip strengths. The fixed effects with the random effect of subject together explain 95.57% of the variation in grip strength. 
+
+
+```{r}
+library(MuMIn)
+r.squaredGLMM(lmer3)
+```
+
+
+## Part 3: Three-level model
+
+
+**10) The previous model failed to account for groups and that you were nested into groups for taking measurements that might also be systematically different on grip strength. Modify `lmer3` to fit a new model account for group and then make a new  `model_diagram` and generate an `Anova` set of F-tests for the model. No discussion.**
+
+```{r}
+lmer4 <- lmer(GripStrength ~ Hand*Arm + forearm_bins + GripTesterID + (1|GroupName/SubjectID), data = combinedR)
+
+Anova(lmer4, test.statistic = "F")
+model_diagram(lmer4, heightVal = 800)
+```
+
+**11) Discuss how the denominator DF from the F-tests loosely/qualitatively relate to the `model_diagram` results for the Grip Tester, forearm, and Hand fixed effects. Report how many unique values were present at each level (provided in the model diagram) and the denominator DF in the discussion. Note that this is not about a formula but about relative size and number of unique observations at each level.**
+
+The model diagram shows 11 groups, 43 subjects, and 257 observations. 
+The denominator DF generally make sense because the griptester DF is 5.739, forearm_bins is 33.920, and hand, arm, hand:arm all have denominator DF of 209.006. These relative sizes line up with the unique values in our model diagram for the levels where these groups were applied. 
+
+**12) Generate an caterpillar plot from your new model. Find your group or a group of interest to you. Discuss the relative location of that group and, if you know something about the group, discuss whether this result is something you expected given how we formed the groups based on height of the students. **
+
+At the group level, the TallerThanYou group had relatively higher estimated mean grip strength than the rest of the groups, and the average.  This makes sense as these individuals were the tallest in their class last semester, and included PATaller who had the highest grip strength of all. 
+
+```{r}
+ranef(lmer4)
+dotplot(ranef(lmer4, postVar = T))
+```
+
+
+**13) Note any additional resources used to complete this lab or NONE.**
+
+NONE

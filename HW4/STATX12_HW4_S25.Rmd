@@ -1,0 +1,213 @@
+---
+title: "HW 4"
+output:
+  word_document:
+    fig_height: 5
+    fig_width: 8
+date: "Due February 17, 2025"
+author: "No names needed - indicate group members in gradescope"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+options(show.signif.stars = FALSE)
+
+library(ggplot2)
+library(ggthemes)
+library(tidyverse)
+library(car)
+library(effects)
+library(mosaic)
+library(ggmosaic)
+library(remotes) #Needed for next two installs from github:
+
+#Re-comment this after running it once:
+#remotes::install_github("greenwood-stat/ggResidpanel")
+library(ggResidpanel)
+#remotes::install_github("greenwood-stat/catstats2")
+library(catstats2)
+library(gtsummary)
+library(lubridate)
+library(patchwork)
+theme_set(theme_bw()) #Prevents need for + theme_bw() in ggplots
+```
+
+# HW 4 Instructions:
+
+* In groups of 2 to 4 (your choice of group members, but you must be in a group to complete the submission), complete the following questions. If you are having trouble identifying group members, post in the Water Cooler channel in MS Teams.
+
+Read Fabusova et al. (2024) and use the provided data set ("moths.xlsx") to answer the following questions.
+
+* Fabusova M, Gaston KJ, Troscianko J. 2024 Pulsed artificial light at night alters moth flight behaviour. Biol. Lett. 20: 20240403. https://doi.org/10.1098/rsbl.2024.0403
+
+## Part I: More modeling of latency time
+
+The `Latency` (seconds) is the time to the moth starting to move after the treatment is applied or 10 seconds of dark for the control group. The treatment information is coded in three variables, `Treatment` with 5 levels (numbered unhelpfully as 1 to 5, shown with better labels once we figure out their meaning on the x-axis in Figure 2a) and also in `Colour` (cold or warm) and `Spectra` (LED or RGB - note that the LED level in this variable is the "Phosphor LED" and RGB level is the "RGB LED" in their Figure 2). 
+
+
+```{r}
+library(readxl)
+moth <- read_excel("moths.xlsx", 
+     sheet = "complete_dataset_MAIN FAMILIES.", 
+    na = "NA")
+
+library(lubridate)
+moth <- moth %>% mutate(Date = factor(ymd(Date))) %>% dplyr::select(-Sunset_time)
+
+moth2 <- moth %>% drop_na(Date, ID, Location, Treatment, Treatment_y_n, Colour, Spectra, Moon_Phase, Temp, Wind_speed_ms, Humidity, Common_name, Latin_name, Family, Sub_family, Latency, Erratic_behaviour)
+
+moth2 <- moth2 %>% mutate(Treatment = fct_recode(factor(Treatment),
+                                                 "Cold Phosphor" = "1",
+                                                 "Warm Phosphor" = "2",
+                                                 "Cold RGB" = "3",
+                                                 "Warm RGB" = "4"), #5 recoding not needed - controls dropped
+                          logLatency = log(Latency))
+       
+```
+
+
+## Use the cleaned data set for all remaining questions on the HW:
+
+```{r}
+lm1 <- lm(logLatency ~ Humidity * Treatment, data = moth2)
+summary(lm1)
+lm1 %>% tbl_regression(intercept = T)
+
+lm2 <- lm(logLatency ~ Humidity + Treatment, data = moth2)
+summary(lm2)
+lm2 %>% tbl_regression(intercept = T)
+
+plot(allEffects(lm2), grid = T)
+```
+
+* Interaction model from HW 3: $\hat{\mu}\{logLatency|Humidity \ast Treatment\} = -5.6 + 0.16Humidity + 5.0I_{Treatment = WarmPhosphor} + 11I_{Treatment = ColdRGB} + 1.5I_{Treatment = WarmRGB} - 0.10HumidityI_{Treatment = WarmPhosphor} -0.24HumidityI_{Treatment = ColdRGB} -0.01 HumidityI_{Treatment = WarmRGB}$
+
+* where $I_{Treatment = WarmPhosphor}$ is 1 for a warm phoshor observation and 0 otherwise, $I_{Treatment = ColdRGB}$ is 1 for a cold RGB observation and 0 otherwise, and $I_{Treatment = WarmRGB}$ is 1 for a warm rgb observation and 0 otherwise.
+
+
+For `lm1`, the theoretical linear model being fit is:
+
+$\mu\{logLatency|Humidity \ast Treatment\} = \beta_0 + \beta_1 Humidity + \beta_2 I_{Treatment = WarmPhosphor} + \beta_3 I_{Treatment = ColdRGB} + \beta_4 I_{Treatment = WarmRGB} + \beta_5 HumidityI_{Treatment = WarmPhosphor} + \beta_6HumidityI_{Treatment = ColdRGB} + \beta_7HumidityI_{Treatment = WarmRGB}$
+
+1) The following code compares the two provided models. In ESS F-tests, we set coefficients to 0 under the null hypothesis, Write out the null and alternative hypotheses in terms of the numbered true slope coefficients (the $\beta$s) from `lm1` as written out above for the following result:
+
+
+```{r}
+anova(lm2, lm1)
+```
+
+  * $H_0:$ $\beta_5 = \beta_6 = \beta_7 = 0$
+
+  * $H_A:$ at one of $\beta_5 , \beta_6 , \beta_7$ does not equal 0
+
+
+2) Run `Anova` on the interaction model and use that result to write out an evidence sentence for the interaction test. Make sure you include details on the test statistic, its distribution under the null, and whether you think there really is an interaction here and whether you would keep/remove the interaction based on this result.
+
+**There is little to no evidence against the null hypothesis of no difference in the effect of humidity on log latency time for different levels of treatment ($F_{3,294}$ = 1.7711, p-value = 0.153), after accounting for the main effects of Humidity and Treatment. We conclude that there is no interaction between humidity and treatment, and would consider removing the interaction term from the model. **  
+
+Written another way: 
+**There is little to no evidence against the null hypothesis of no interaction between humidity and treatment on log latency time (F(3,294) = 1.7711, p-value = 0.153), after accounting for the main effects of Humidity and Treatment. We conclude that there is no significant interaction between humidity and treatment, and would consider removing the interaction term from the model.**
+
+
+```{r}
+Anova(lm1)
+```
+
+
+Regardless of your previous answer, use the additive model for the following questions.
+
+3) Report an evidence sentence using the t-test for Humidity in the additive model. Again, remember to include details on the test statistic, its distribution under the null, and whether you think there is a relationship and whether you would keep/remove the term based on this result.
+
+**There is some evidence against the the null hypothesis of no relationship between Humidity and log latency time ($t_{297}$ = 1.838, p-value = 0.067), after controlling for Treatment. We conclude that there is some evidence of a relationship between humidity and log latency time and would keep the term in the model.**
+
+
+```{r}
+summary(lm2)
+```
+
+
+4) Report the test statistic, distribution under the null, and p-value for humidity (no evidence sentence needed) based on the following code. Then explain why the p-value for humidity here is different from your previous result. 
+
+**$F_{1,297}$=2.807, p-value = 0.09489** The p-value is different here because the F-test in the ANOVA takes into account the combined effect of both Humidity and Treatment on model fit, while the t-test for Humidity assesses the individual effect of Humidity, controlling for the effects of Treatment. The higher p-value from the F-test (0.095) suggests that when Humidity and Treatment are included together in the model, the improvement in fit is not large enough to provide evidence that Humidity influences log latency time. 
+
+
+```{r}
+anova(lm2)
+```
+
+
+
+5) Write a scope of inference for `lm2` in this situation. Note that you need to explain your reasoning clearly for why you are making both your causality and generalization assessments and that each aspect should be done in separate sentences (sentence(s) for causality and sentence(s) for generalization). Also, with two predictors, you need to address both in the causality assessment. And finally, you have information on when and where the moths were sampled and should incorporate that information in your SOI.
+
+**Treatment of light exposure was randomly assigned to moths in this study, so we can infer causal relationships between treatment and logLatency. Since humidity was not randomly assigned, we cannot infer a causal relationship between humidity and logLatency. The data was collected from wild-caught moths at Tremough Campus, Penryn, Cornwall, UK, over the months of June to September 2023. Generalization is limited to wild months in similar environmental conditions. We cannot generalize to all wild-caught moths since only moths from specific study locations were used.**
+
+
+6) We took the authors' assessment at face value to produce the previous results. Let's explore the need for the log-transformation of the Latency time. Fit the interaction model with Humidity and Treatment to the original Latency time responses and generate the standard "R" diagnostic plot array from `ggResidpanel`. Discuss the normality of residuals assumption, citing pertinent plot(s).
+
+
+**There is evidence against equal variance as seen in the Residual vs Fitted Plot. As predicted values increase, the variance in residuals also increases. This can also be seen in the Location-scale plot, where the spread of residuals increases with fitted values. Deviations from the line of normality in the Q-Q plot suggest evidence against the assumption of normality. All of these suggest a log transformation may be useful.**
+
+
+```{r}
+lm_orig <- lm(Latency ~ Humidity*Treatment, data = moth2)
+ggResidpanel::resid_panel(lm_orig, "R")
+```
+
+
+
+7) Now consider the log-Latency response additive (no interaction) model (`lm2` above). Use `resid_calibrate` to make four QQ-plots (one real and three simulated when the normality assumption is actually true). Use the array of plots to discuss the normality of residuals assumption for the additive model for the log-latency response and implications for using this model based on this result.
+
+**The real QQ-plot (plot 4) shows deviations from the line of normality, particularly in the tails. The three simulated QQ-plots, which assume normality, align closely with the line. These deviations in the real QQ-plot suggest evidence against the assumption of normality. The violation of the normality assumption can have implications for the reliability of the model’s results, affecting the validity of any inferences we may draw.**
+
+
+```{r fig.width = 10, fig.height = 10}
+set.seed(406) 
+resid_calibrate(lm2, plots = c("qq"), nsim = 3, identify = TRUE)
+```
+
+
+
+## Part II: Flight type analysis
+
+8) Another outcome of interest to the researchers was the type of flight that the moths took after the various treatments were applied. This information is stored in variables such as `Fly_Into_Light`, which was coded as a 1 for when the moth flew toward the light and 0 otherwise, converted to a factor variable with those levels for you with any missing values on the outcome removed in `moth3`. Make an appropriate display of that flight-into-light response versus the Treatment. This should resemble a part of their Figure 2a, although it will contain less information. 
+
+Based on your plot, which treatments had the highest and lowest proportions of moths that flew into the light?
+
+**Treatments with the highest proportion of moths flying into the light were the cold phosphor and cold rgb, cold phosphor being the greatest. The warm treatments had the lowest proportions, with cold phosphor seeming the lowest. **
+
+```{r}
+moth3 <- moth2 %>% drop_na(Fly_Into_Light) %>% 
+  mutate(Fly_Into_Light = factor(Fly_Into_Light))
+
+ggplot(moth3) +
+  geom_mosaic(aes(x = product(Treatment), fill = Fly_Into_Light)) +
+  labs(title = "Proportion of Moths Flying into Light by Treatment",
+       x = "Treatment",
+       y = "Proportion of Moths Flying into Light") +
+  scale_fill_manual(values = c("steelblue", "orange3"), 
+                    name = "Fly Into Light",
+                    labels = c("otherwise", "flew toward light")) +
+  theme_minimal()
+```
+
+
+9) Fit an appropriate generalized linear model for the response of flight-into-light based on the Treatment. Make effects plots on the link and response scale (don't change the y-axis text labels). No discussion.
+
+
+```{r}
+lm_light <- glm(Fly_Into_Light ~ Treatment, data = moth3, family = "binomial")
+
+plot(allEffects(lm_light, residuals = T), type = "link")
+plot(allEffects(lm_light, residuals = T), type = "response")
+```
+
+
+10) The effects plot result on the response scale should match the previous plot in terms of the estimated probabilities. Based on this comparison, was the "1" (yes, the moth flew into the light) or "0" (no, the moth did not fly into the light) the "success" in the GLM? How did you determine this?
+
+**"1" was the "success" in the GLM because the effects plot result on the response scale seems to align with the probability of a moth flying into the light (coded as 1).**
+
+
+11) Document any collaborations or pertinent discussions with other students or resources outside of your group and the resources that I am providing and the _Sleuth_ that you used to complete this assignment *or report that you did not have any*. If you used generative AI (chatGPT, Bard, etc.), report which question(s) and how/what you asked for.
+
+  * NONE

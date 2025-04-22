@@ -1,0 +1,258 @@
+---
+title: "Lab 11"
+output:
+  word_document:
+    fig_height: 5
+    fig_width: 8
+date: "04/02/25"
+
+Ricardo Leiton, Trenton Wolfe, Ben Patterson
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+options(show.signif.stars = FALSE)
+
+library(ggplot2)
+library(ggthemes)
+library(tidyverse)
+library(car)
+library(effects)
+library(readxl)
+library(mosaic)
+library(remotes)
+library(ggResidpanel)
+library(easyalluvial)
+library(emmeans)
+library(patchwork)
+library(plotly)
+library(gtsummary)
+library(lme4)
+library(nlme)
+library(lmerTest)
+library(forcats)
+webshot::install_phantomjs(force = T)
+theme_set(theme_bw()) #Prevents need for + theme_bw() in ggplots
+```
+
+
+# Preparation for Lab 11:
+
+* Please review the materials provided in https://rconnect.math.montana.edu/Data_Wrangling/#section-relational-data-with-dplyr
+
+* Pay particular attention to the discussion of `left_join` and think about how we might use it to join your repeated measures of grip strength with the demographics data set.
+
+
+* For the remaining work this semester, we need you to update the version of `catstats2` to version 0.3.0. Please run the following code once. It will ask you to update other packages and that should not be needed, so you can go to the console and choose option 3 or enter on an empty line.
+
+
+```{r}
+#remotes::install_github("greenwood-stat/catstats2", force = T)
+library(catstats2)
+packageVersion("catstats2")
+
+```
+* If the previous chunk reports `0.3.0`, you can comment out the `remotes::` line for the rest of your work on the lab.
+
+# Part 1: Grip strength potential interaction:
+
+
+```{r}
+GripStrengthMeasurements <- read_excel("GripStrengthMeasurementsS25.xlsx")
+GS <- GripStrengthMeasurements %>% drop_na(GripStrength) #Mostly cleans out empty rows
+
+library(mi)
+r1 <- missing_data.frame(as.data.frame(GS))
+table(r1@patterns)
+tally(Hand~Arm, data = GS)
+```
+
+
+```{r}
+GS2 <- GS %>% drop_na(Arm)
+GS2 <- GS2 %>% mutate(Arm = forcats::fct_collapse(Arm,
+                                                Up = c("Up", "up"),
+                                                Down = c("Down", "down"),
+                                                "90" = c("90", "90 degree")),
+                    SubjectID = forcats::fct_collapse(SubjectID,
+                                          MDEarl = c("MDEarl","MDEar")),
+                    Arm = factor(Arm),
+                    Hand = factor(Hand),
+                    OrderF = factor(Order)
+)
+tally(~Arm, data = GS2)
+
+tally(Arm ~ Hand, data = GS2)
+GS2 %>% dplyr::select(Hand, Arm) %>% alluvial_wide(bin_labels = "mean", fill_by = "last_variable", bins = 6)
+
+GS2 <- GS2 %>% mutate(Hand.Arm = factor(str_c(Hand, Arm)))
+
+Spaghetti_GS2 <- GS2 %>% ggplot(mapping = aes(x = Hand.Arm, y = GripStrength, group = SubjectID)) +
+  geom_line(alpha = 0.3) +
+  geom_point(aes(color = Order), alpha = 0.7) +
+  scale_color_viridis_c(end = 0.8)
+
+Spaghetti_GS2
+Spaghetti_GS2 %>% ggplotly()
+```
+
+
+**1) What did the `fct_collapse` function do and why was it needed in the previous code?**
+
+'fct_collapse' collapses factor levels into our own defined groups. This was needed in the code to make sure we are accounting for observations that spelled their inputs differently. For example, it defined inputs that put "Up" and "up" both as "Up". It did this for the subjectID for MDEarl when there was a misspelling as well. 
+
+**2) The addition of the line of code of `webshot::install_phantomjs(force = T)` should allow you to knit to Word even with interactive documents, but uncomment in the `ggplotly` lines if that is problematic. Find someone in your group or an observation that looks interesting and track that value across the treatment combinations. Does the subject tend to do better or worse on dominant or non-dominant hand across arm positions? Is there an optimal arm position for either or both hands for that subject? Now, look at the whole plot. What can you say about the differences in grip strength across hands (dominant/non-dominant), arm positions, and subjects?**
+
+We are following OrlandoChamp! For this subject the highest gripstrength was observed when dominant hand was in the Up position. Other than this difference, the other combinations of dominant and nondominant in various positions were within 3lbs of each other. When looking at the whole plot, nondominant observations seem to be lower than dominant observations across subjects. There also seems to be a trend where 90degree observations have lower GripStrengths than down or up. This holds for both dominant and nondominant hands.
+
+**3) Is this a balanced design relative to the Hand and Arm variables?**
+
+No! (Technically) There are 44 observations for all combinations of hand and arm except for nondominant down which only has 43. 
+
+```{r}
+tally(Arm ~ Hand, data = GS2)
+```
+
+**4) Make an interaction plot and discuss the potential for an interaction of Arm and Hand on the Grip Strength responses. If you think there is a potential interaction, discuss the pattern. If you don't think there is a potential interaction, discuss the possible pattern of results in the two enhanced stripcharts that provide a hint about the results for each of the main effects.**
+
+Based on the interaction plot there does not seem to be a huge potential for an interaction between Arm and Hand. We say this because the lines in the upper left and lower right plots seem to be parallel to each other with not much difference in slope. Looking at the upper right and lower left stripcharts, we can see some patterns for the two main effects. In these it looks like the Up position had the highest observations and 90 degree lowest. Non-dominant hands also showed a general lower trend than the dominant hands. 
+
+```{r}
+ggintplot(response = "GripStrength", groupvars = c("Hand", "Arm"), data = GS2)
+
+```
+
+
+**5) We will dive more deeply into linear mixed models in the coming weeks, but the following code uses the `lmer` function from the `lme4` package (with some modifications from the `lmerTest` package so you can see p-values) to fit a mixed model that incorporates subject as a "random" effect. You can interpret the results for the "fixed" effect (starting with arm and hand and their interaction on grip strength) as "conditional on" or "adjusted for" subject much like we did if it was included as a fixed effect. Report an evidence sentence for the interaction test from the following results and what it suggests for the interaction in the model.**
+
+There is weak evidence against the null hypothesis of no interaction between Hand and Arm on GripStrength ($F_{2,214.01}$ = 0.377, p-value = 0.686), adjusting for subjects, so we would conclude there is not an interaction and drop it from the model. 
+
+```{r}
+lmer1 <- lmer(GripStrength ~ Hand*Arm + (1|SubjectID), data = GS2)
+
+Anova(lmer1, test.statistic = "F")
+
+```
+
+
+**6) Run the following code to generate a `model_diagram` for this model. How can you explain the location for the Hand, Arm, and Hand:Arm interaction in the plot?**
+
+Hand, Arm, and Hand:Arm are located at the top of the right column of the model diagram. This is because these are indicated at the observation level, not the subject level. The 6 observations per individual are a combination of hand and arm. If they were over the left column it would indicate that the subjects were split into arm and hand combinations. For example subject 1 would only do dominantUp and subject 2 would do nondominantDown, etc. 
+
+```{r}
+model_diagram(lmer1, heightVal = 800)
+```
+
+
+
+**7) An interactive residual panel is available below. Which subject(s) had the largest and smallest observed residuals (so were most above/below what the model predicted for them)? Generally how large/small was the fitted value for the two most extreme residuals?**
+
+The subject BostonWolverine had both the highest and lowest observed residuals. This individual had an observation with residuals of both 3.027 and -2.74. The fitted values for these points were 92.27 and 92.88, respectively. The model here predicted values that were generally 3-7 lbs different. 
+
+```{r}
+resid_interact(lmer1, c("resid", "qq", "yvp", "hist"))
+```
+
+
+## Part II: Merging (`left_join`-ing) the demographics data
+
+The following code will read in and (eventually) join the demographics data.
+
+```{r}
+dim(GS2)
+Demographics <- read_excel("DemographicsS25.xlsx")
+Demographics <- Demographics %>% dplyr::select(-c(12:13)) #Because of a "note" left in column 13...
+dim(Demographics)
+```
+
+**8) The following code highlights a potential issue with one of the subject IDs. Fix the problem in the Demographics data.frame using R code.**
+
+
+```{r}
+data.frame(sort(unique(GS2$SubjectID)), sort(unique(Demographics$SubjectID)))
+which(sort(unique(GS2$SubjectID)) != sort(unique(Demographics$SubjectID)))
+
+# Fix the problem in Demographics to match GS2:
+Demographics <- Demographics %>% mutate(SubjectID = 
+                                          forcats::fct_recode(SubjectID, LADeathGrips = "LADeath"), 
+                                        SubjectID = 
+                                          forcats::fct_recode(SubjectID, CenntenialWarriors = 
+                                                                "CentennialWarriors"))
+
+#Check that problem was fixed:
+data.frame(sort(unique(GS2$SubjectID)), sort(unique(Demographics$SubjectID)))
+
+
+```
+
+
+```{r}
+Demographics <- Demographics %>% mutate(Weights = factor(Weights))
+
+Demographics <- Demographics %>% mutate(Weights = fct_collapse(Weights,                                                              no = c("no",  "No"),
+               yes = c("yes", "Yes")))
+
+#Join Demographics to the GS2 repeated measures data
+combined <- left_join(x = GS2, y = Demographics, by = "SubjectID")
+
+combinedR <- combined %>% drop_na()
+
+combinedR <- combinedR %>% mutate(forearm_bins   = 
+                                    factor(cut_number(ForearmLength, n = 3)),
+                                  epworth_bins = 
+                                    factor(cut_number(Epworth, n = 3)),
+                                  balance_bins = 
+                                    factor(cut_number(BalanceTime, n = 3)))
+dim(combinedR)
+dim(combined)
+dim(GS2)
+tally(~SubjectID, data = combinedR)
+
+```
+
+**9) What is the sample size before and after the `left_join`? How many subjects are in the data set as analyzed in `combinedR`?**
+
+
+
+```{r}
+unique(combinedR$SubjectID)
+```
+
+**10) Now we can incorporate forearm binned variables into the model using the `forearm_bins`, which we will treat as a fixed effect. Make a `model_diagram` from the provided model and explain/discuss the location of the fixed effects in it.**
+
+
+```{r fig.width = 12, fig.height = 12}
+combinedR <- combinedR %>% mutate(
+                forearm_bins = fct_recode(forearm_bins,
+                                       low = "[9.25,10]",
+                                       medium = "(10,11]",
+                                       high = "(11,13.1]")
+                )
+lmer2 <- lmer(GripStrength ~ Hand*Arm + forearm_bins + (1|SubjectID), data = combinedR)
+
+library(catstats2)
+model_diagram(lmer2, heightVal = 800)
+```
+
+
+
+**11) The following provides the theoretical and estimated fixed effect part of the model, except does not add the subscripts for the fixed effects or define the distributions of the random effects (see all locations with `?`). Add the definition of the random effects and subscripts in the appropriate places based on the previous model diagram.**
+
+```{r}
+lmer2 %>% tbl_regression(intercept = T)
+```
+
+* Theoretical model: $GripStrength_{ij} = \mu_{ij} + Subject_i + \epsilon_{ij}$ 
+
+    - where $Subject_i \sim ?$ and $\epsilon_{ij} \sim ?$ and $i = 1, ..., I$ subjects and $j = 1, ..., n_i$ for the $j^{th}$ observation on the $i^{th}$ subject.
+    
+* Estimated model for $\mu_{ij}$: 
+
+    - Result: $\hat{\mu}_{ij} = 47 - 3.7I_{Hand = ND, ?} + 0.25I_{Arm = Down, ?} + 2.0I_{Arm = Up, ?} + 12 I_{forearmbins = medium,?} + 35I_{forearm_bins = high, ?} + 1.4I_{Hand = ND, ?} I_{Arm = Down, ?} + 1.5 I_{Hand = ND, ?} I_{Arm = Up, ?}$
+
+
+
+**12) Note any additional resources used to complete this lab or NONE.**
+
+NONE

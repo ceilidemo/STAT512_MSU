@@ -1,0 +1,135 @@
+---
+title: "HW 5"
+output:
+  word_document:
+    fig_height: 5
+    fig_width: 8
+date: ""
+author: "DO NOT INCLUDE NAMES - Just add names in gradescope"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+options(show.signif.stars = FALSE)
+
+library(ggplot2)
+library(ggthemes)
+library(tidyverse)
+library(car)
+library(effects)
+library(readxl)
+library(mosaic)
+library(catstats2)
+library(easyalluvial)
+library(emmeans)
+library(patchwork)
+library(plotly)
+library(modelsummary)
+library(ggmosaic)
+library(ggResidpanel)
+theme_set(theme_bw()) #Prevents need for + theme_bw() in ggplots
+```
+
+
+# Rules
+
+In groups of 2, 3, or 4, complete the following. Individual submissions are not allowed and will get a 0 without prior approval to work alone.
+
+# Instructions
+
+For this homework, you will use the tools we've been discussing to do the work that came into a statistical draft report I provide you (Lab5_Demonstrationreport.docx). This report is based on work of students in a previous semester but has been heavily edited. Each of the highlighted or changed colored fonts in the draft report are noted for you to either edit the text or insert the described figures, tables, or citations. It is your task to figure what to do based on the written report (e.g., what model to fit, what sorts of plots to make, etc.).
+
+The work relates to analyzing the data set from Que et al. (2017) but excludes the Indus river observations that they mentioned.
+
+Edit the provided Word document to submit the report portion with your modifications. There are four sentences you need to edit based on the results. Complete the SOI section and add a "wrap-up" sentence that summarizes what you learned for a final sentence in the SOI section (think "size" but maybe less formally). And you need to complete the References, Figures with captions (copy the figures from the knitted work into the location in the Word document and add captions with FIgure numbers), and Tables with numbers and captions (copy and improve/edit based on the knitted work) sections of the report based on your work.
+
+Then you must combine the report word document that contains the report with references, figures, and tables (only) with the knitted version of this document where you will create the results to finish the report. You have access to Adobe Acrobat and can use it to combine PDF files.
+
+In gradescope, identify the page of the edited sentences and added citations, figures, and table, and knitted Rmd pages.
+
+
+```{r}
+library(readxl)
+riverdata <- read_excel("Qu_etal_2017.xlsx")
+riverdataR <- riverdata %>% dplyr::filter(River != "Indus") %>%
+  mutate(logpCO2 = log(pCO2))
+```
+
+Figure 1. Enhanced stripchart of pCO2 by river. 
+```{r fig.width = 8, fig.height = 6}
+enhanced_stripchart(pCO2 ~ River, data = riverdataR) + labs(y = "Partial CO2 pressure (\u03BCatm)")
+```
+
+Figure 2. Scatterplot of pCO2 vs Elevation by River. 
+```{r fig.width = 8, fig.height = 6}
+ggplot(data = riverdataR, mapping = aes(x = Elevation, y = pCO2, color = River)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  geom_smooth(col = "red", lty =2, se = F) + 
+  labs(x = "Elevation (m)",
+       y = "Partial CO2 pressure (\u03BCatm)", 
+       title = "Scatterplot of pCO2 vs Elevation by River")
+
+ggplot(data = riverdataR, mapping = aes(x = Elevation, y = pCO2)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  geom_smooth(col = "red", lty =2, se = F) + 
+  facet_wrap(~ River) + 
+  scale_color_viridis(discrete = TRUE) + 
+  labs(x = "Elevation (m)",
+       y = "Partial CO2 pressure (\u03BCatm)", 
+       title = "Scatterplot of pCO2 vs Elevation by River")
+```
+
+
+Figure 3. Diagnostic plots for the interaction model: μ\{pCO2|River&Elevation\} ~ River*Elevation
+```{r fig.width = 8, fig.height = 6}
+river1 <- lm(pCO2 ~ River*Elevation, data = riverdataR)
+ggResidpanel::resid_panel(river1, "R")
+#resid_interact(river1, "R")
+```
+
+
+Figure 4.  Diagnostic plots for the interaction model: μ\{logpCO2|River&Elevation\} ~ River*Elevation
+```{r fig.width = 8, fig.height = 6}
+river2 <- lm(logpCO2 ~ River*Elevation, data = riverdataR)
+ggResidpanel::resid_panel(river2, "R")
+#resid_interact(river2, "R")
+```
+
+
+Figure 5. Effects plot with partial residuals for the log interaction model: μ\{logpCO2|River&Elevation\} ~ River*Elevation
+```{r fig.width = 8, fig.height = 6}
+plot(allEffects(river2, grid = T, residuals = T))
+```
+
+
+Figure 6.  Diagnostic plots for the additive model: μ\{logpCO2|River&Elevation\} ~ River+Elevation
+```{r fig.width = 8, fig.height = 6}
+river3 <- lm(logpCO2 ~ River + Elevation, data = riverdataR)
+ggResidpanel::resid_panel(river3, "R")
+#resid_interact(river3, "R")
+```
+
+
+Figure 7. 
+```{r fig.width = 8, fig.height = 6}
+plot(allEffects(river3, grid = T, residuals = T))
+```
+
+
+Table 1. Summary statistics for pCO2 and elevation by river. 
+```{r}
+fortable1 <- riverdataR %>% dplyr::select(
+  `Partial CO2 Pressure` = pCO2, 
+  `Elevation` = Elevation, 
+  `River` = River
+)
+
+table1 <- datasummary_balance(~River, data = fortable1,
+                              title = "Table 1. Summary Statistics", 
+                              stars = F, 
+                              dinm = T)
+table1
+```

@@ -1,0 +1,194 @@
+---
+title: "HW 2"
+output:
+  word_document:
+    fig_height: 5
+    fig_width: 8
+date: "Due 1/31/2025"
+author: "Ceili DeMarais"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+options(show.signif.stars = FALSE)
+
+library(ggplot2)
+library(ggthemes)
+library(tidyverse)
+library(car)
+library(effects)
+library(mosaic)
+library(remotes) #Needed for next two installs from github:
+
+#Re-comment this after running it once:
+#remotes::install_github("greenwood-stat/ggResidpanel")
+library(ggResidpanel)
+#remotes::install_github("greenwood-stat/catstats2")
+library(catstats2)
+theme_set(theme_bw()) #Prevents need for + theme_bw() in ggplots
+```
+
+# HW 2 Instructions:
+
+Continuing with sitting and brain impacts and working individually, complete the following based on the Siddarth et al. (2018) paper. 
+
+
+* Siddarth P, Burggren AC, Eyre HA, Small GW, Merrill DA (2018) Sedentary behavior
+associated with reduced medial temporal lobe thickness in middle-aged and older adults. PLoS ONE 13(4): e0195549. https://doi.org/10.1371/journal.pone.0195549
+
+1) The following code checks for missing values in the data set. Generate a "clean" data set with no missing observations using `drop_na()` but also keep a version with all observations. What is the sample size to start with and after "cleaning"?
+
+  * The beginning sample size was 35 observations, and after cleaning this number dropped to 30 observations. 
+
+```{r}
+data(sit_and_brain)
+library(mi)
+tdf <- missing_data.frame(data.frame(sit_and_brain))
+image(tdf)
+table(tdf@patterns)
+
+dat <- sit_and_brain %>% drop_na()
+tdf1 <- missing_data.frame(data.frame(dat))
+image(tdf1)
+```
+
+
+2) For this question, code is provided to make a version of Table 1 that includes all the variables in the data set except for `Subject` using the `datasummary_balance` function from the `modelsummary` package. Your task is to create a second version of Table 1 for the the "cleaned" version of the data set from the previous question. No discussion.
+
+* Note that in contrast to the version in my notes, use `~1` as the formula in order to not split the results up by groups, so it will mostly match their version of the table. You do not need to work on variable labels/names or sorting to match their version of the results. 
+
+
+```{r}
+library(modelsummary)
+
+datasummary_balance(~1, data = sit_and_brain %>% dplyr::select(-Subject),
+                    stars = T,
+                    dinm = T)
+
+datasummary_balance(~1, data = dat %>% dplyr::select(-Subject),
+                    stars = T,
+                    dinm = T)
+```
+
+3) Compare the two sets of summary statistics (i.e., your two tables) to their Table 1 for `Age`. Does it appear that they used all available information or only "complete cases" (this is what you get if you run `drop_na()` on the entire data set to get only observations that are "complete" on all considered variables)? 
+
+  * It looks as if they used all available information in their Table 1. Their sample size was 35 and the mean age, 60.4, was the same as our "non-cleaned" dataset with NA values. 
+  
+
+4) In their Table 2, how many p-values do they report? What was their rule for "bolding" p-values in that table?
+
+  * They report 16 p-values, accounting for each of their beta coefficients. They bolded p-values that were less than or equal to 0.05. These values they considered "s-word" in their write up. 
+
+
+5) (Re)-read section 1.8 in Greenwood (202X) that is titled "Reproducibility Crisis: Moving beyond p < 0.05, publication bias, and multiple testing issues". Using a result from that section, what is the probability of at least one Type I error in their Table 2 if the tests were all independent of each other and all null hypotheses were true and they used a 0.05 cutoff for each test?
+
+  * The probability of there being at least one Type I error in their Table 2 if all the tests were independent of each other and all null hypotheses were true and they used a 0.05 cutoff for each test is 0.5599 (55.99%).
+  
+
+```{r}
+1-(0.95^16)
+```
+
+
+
+6) The Bonferroni correction involves taking the p-values and multiplying the p-values by the number of tests being considered (adjusted p-values cannot exceed 1 since this is a probability, so it is really $p_{adj} = min(p-value \ast number of tests, 1)$). The vector of bolded p-values is provided below. Use that vector to generate the Bonferroni-adjusted p-values for those four tests (this should account for the total number of tests in the table, not just those four). What does this do to your assessment of the potential for evidence against the suite of null hypotheses that sitting and activity are not related to the various brain thickness measurements, controlled for the other focal variable (sitting or activity) and the age of the subjects?
+
+  * This decreases the evidence against the suite of null hypotheses that sitting and activity are not related to the various brain thickness measurements, controlled for the other focal variable (sitting or activity) and the age of the subjects. Before the adjustment there was strong evidence against the null, but after adjustment there is little to none. 
+
+```{r}
+pvals <- c(0.03, 0.05, 0.007, 0.04)
+
+pvals_adj <- p.adjust(pvals, method = "bonferroni", n = 16)
+
+data.frame(Original_pval = pvals, Adjusted_pval = pvals_adj)
+
+```
+
+
+Use the full data set for this (`sit_and_brain`) and the remaining questions:
+
+7) They note that they log-transformed the Physical activity (`METminwk`) variable but don't state which type of log transformation they used. Create three versions of the log of the METminwk: natural `log`, `log10`, and `log2` using `mutate`. Fit three models for `TOTAL`  with each including `Sitting` and `Age` and then try each of the versions of the log-METminwk. Generate model summaries and `confint` results. Which of three sets of results seem to match their reported results for total MTL thickness best that are reported in the first two rows of Table 2?
+
+* Note that again they might not have used proper rounding rules to report their results.
+
+  * Their reported results for total MTL thickness are -0.02 (-0.04, -0.002) for sitting, and 0.007 (-0.07, 0.08) for physical activity. Based on the comparison of different results below, it looks like they used the natural log. 
+
+
+```{r}
+sit_and_brain <- sit_and_brain %>% mutate(METminwk_log = log(METminwk),
+                                          METminwk_log10 = log10(METminwk),
+                                          METminwk_log2 = log2(METminwk))
+
+m_log <- lm(TOTAL ~ Sitting + Age + METminwk_log, data = sit_and_brain)
+summary(m_log)
+confint(m_log)
+
+m_log10 <- lm(TOTAL ~ Sitting + Age + METminwk_log10, data = sit_and_brain)
+summary(m_log10)
+confint(m_log10)
+
+m_log2 <- lm(TOTAL ~ Sitting + Age + METminwk_log2, data = sit_and_brain)
+summary(m_log2)
+confint(m_log2)
+
+##I'm putting them all in a table also for the sake of comparison :) 
+library(broom)
+tidy_m_log <- tidy(m_log)
+tidy_m_log10 <- tidy(m_log10)
+tidy_m_log2 <- tidy(m_log2)
+conf_m_log <- confint(m_log)
+conf_m_log10 <- confint(m_log10)
+conf_m_log2 <- confint(m_log2)
+
+comp_results <- data.frame(
+  Term = tidy_m_log$term,
+  `Estimate (log)` = tidy_m_log$estimate,
+  `Std. Error (log)` = tidy_m_log$std.error,
+  `t value (log)` = tidy_m_log$statistic,
+  `p value (log)` = tidy_m_log$p.value,
+  `CI Lower (log)` = conf_m_log[, 1],
+  `CI Upper (log)` = conf_m_log[, 2],
+  
+  `Estimate (log10)` = tidy_m_log10$estimate,
+  `Std. Error (log10)` = tidy_m_log10$std.error,
+  `t value (log10)` = tidy_m_log10$statistic,
+  `p value (log10)` = tidy_m_log10$p.value,
+  `CI Lower (log10)` = conf_m_log10[, 1],
+  `CI Upper (log10)` = conf_m_log10[, 2],
+  
+  `Estimate (log2)` = tidy_m_log2$estimate,
+  `Std. Error (log2)` = tidy_m_log2$std.error,
+  `t value (log2)` = tidy_m_log2$statistic,
+  `p value (log2)` = tidy_m_log2$p.value,
+  `CI Lower (log2)` = conf_m_log2[, 1],
+  `CI Upper (log2)` = conf_m_log2[, 2]
+)
+
+print(comp_results)
+
+```
+
+
+
+8) Make an effects plot for the model that best matches their results from the previous question. Based on the effects plots, which of the three predictors had the most impact on the estimated mean response? Use the `grid=T` option to help with assessing change over the range in the estimated mean response across the range of observed predictor values.
+
+
+  * Based on the effects plots below, it seems as though the sitting predictor had the most impact on the estimated mean response. 
+
+
+```{r fig.width = 12, fig.height = 12}
+
+plot(allEffects(m_log, residuals = T), grid = T)
+
+```
+
+
+
+9) I want to check your version of R. Do not edit the code below as it will check your version of R and report that in the knitted document. You should be using R 4.4.2 and you should make sure your packages are relatively up to date.
+
+* R version (short form): `r getRversion()`
+
+10) Document any collaborations or pertinent discussions with other students or resources outside of your group and the resources that I am providing and the _Sleuth_ that you used to complete this assignment *or report that you did not have any*. If you used generative AI (chatGPT, Bard, etc.), report which question(s) and how/what you asked for.
+
+NONE

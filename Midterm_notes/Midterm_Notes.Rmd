@@ -1,0 +1,230 @@
+---
+title: "Midterm:Notes"
+author: "Ceili DeMarais"
+date: "2025-03-24"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+options(show.signif.stars = FALSE)
+
+library(ggplot2)
+library(ggthemes)
+library(tidyverse)
+library(car)
+library(effects)
+library(mosaic)
+library(ggmosaic)
+library(remotes) 
+library(ggResidpanel)
+library(catstats2)
+library(gtsummary)
+library(lubridate)
+library(patchwork)
+library(MuMIn)
+library(lmerTest)
+library(cetcolor)
+library(ggrepel)
+library(easyalluvial)
+theme_set(theme_bw()) 
+```
+
+##BIC vs AIC
+BIC is more likely to select simpler models for larger datasets 
+
+##Balanced design
+completely balanced!
+
+##GLM Poisson vs Logit 
+poisson = count response . link function = on log scale
+logistic regression = binary response = family is binomial 
+
+##PSFR/Runner Examples##
+**Labs 1,2,3,4**
+
+##Estimated difference in mean PSFR levels between male and female: 
+The estimated difference in the mean PSFR levels between male and female subjects is -0.1045$mm^{-1}$(Male - Female). Male subjects had a mean PSFR level that was 0.1045$mm^{-1}$ less than females
+
+##Size interpretation of slope coefficient for slope coefficient for sex
+For two otherwise similar subjects but that differ on the sex of the subjects, the estimated mean PSFR of male subjects is 0.1$mm^{-1}$ lower than that of female subjects (95% confidence interval from 0.1 to 0.16). (Lab2) 
+
+##Evidence sentence for a slope coefficient from large model
+There is little to no evidence against the null hypothesis of no interaction between years running and PSFR ($t_{151}$ = -0.312, two-sided p-value = 0.755), controlling for age, sex, BMI, WaisttoHip, CurrPain, HistPain, VISA-A, CSA, etc.. so we conclude that they are not linearly related after adjusting for the other variables and would drop the term from the model. (Lab 2)
+
+##Interpret age predictor SIZE on mean count (heel raise!) Size interpretation
+For two otherwise similar subjects but that differ by 1 yer age, we estimate that the mean number of heel raises until failure will change by 1.01 times that of the younger individual at USC (95% CI: exp(1.00) to exp(1.01)). 
+
+```{r}
+library(readxl)
+ tendon <- read_excel("Runner Factors related to Intra-tendonious Morphology updated .xlsx")
+ 
+  tendon <- tendon %>%
+      dplyr::rename(SubjectID = 'Subject ID',
+             Sex = 'Sex  (M=1)',
+             CurrPain = 'CurrPain (Y=1)',
+             WaisttoHip = 'Waist to Hip',
+             VISAA = 'VISA-A',
+             Neovascularization = 'Neovascularization (Doppler) (Y=1)',
+             HistPain = 'Hx Pain (Y=1)') %>%
+      mutate_if(is.character, as.factor) %>%
+      mutate(CurrPain = factor(CurrPain),
+             Neovascularization = factor(Neovascularization),
+             Sex = factor(Sex),
+             Location = factor(substr(SubjectID, 1, 3)),
+             HistPain = factor(HistPain),
+             PainCombs = factor(str_c(HistPain, CurrPain)))
+  levels(tendon$PainCombs) <- c("NoPain", "PreviousPainOnly", "CurrentPainOnly", "Both")
+  
+  tendonna2 <- tendon %>% drop_na()
+```
+
+Interaction df = (I-1)*(k-1) 
+
+Residuals df = n-IK
+
+##River example##
+**Lab5, ass5**
+
+```{r}
+library(readxl)
+riverdata <- read_excel("Qu_etal_2017.xlsx")
+riverdataR <- riverdata %>% dplyr::filter(River != "Indus") %>%
+  mutate(logpCO2 = log(pCO2))
+```
+
+##Snow Examples
+**Lab6,7,8,9**
+
+##Evidence sentence for aspectCat from Anova
+There is weak evidence against the null hypothesis of no difference in the true mean snow density across the aspect categories ($F_{3,786}$=1.44, p-value = 0.23) controlled for radiation, snow depth, and elevation, so we would conclude that there isn't a difference after adjusting for the other variables and drop it from the model. (lab 6)
+
+##Model differentials 
+In the additive model, the slope coefficients are larger because they reflect the independent effect of snow after removing influence of SWE. Multicollinearity and shared variance. (lab 6) 
+
+##assess linearity assumption
+There is a slight violation of linearity for elevation shown with the smoothing line being slightly above the linear fit for low elevations and below for middle and then high after that where there are a few points. It is not a clear violation since the partial residuals are fairly spread out and the pattern is now clearly showing in the points, but this could be explored more.. 
+
+##look at #3 in lab 8 for polynomials 
+
+##Size interpretation
+At a snow depth of 0mm, the estimated mean snow density is about 360${kg}/{m^3}$. As snow depth increases to around 100mm, the estimated mean density decreases to around 300. As depth continues to increase, snow density then begins to increase. Etc. 
+
+##Interaction plot with pattern and preliminary evidence
+Pattern: In north facing slopes the estimated mean snow density for forest sites is 275 but the nf sites have an estimated mean of 300. For every other level of aspect, the difference in land cover level is minimal even though the means for different aspects do vary with south being a bit higher than East or West. 
+
+Prelim Evidence: There is a large data set but there is also a lot of variability around the means in the observations, so it might be possible to find evidence related to an interaction, but it is not a very dramatic pattern of interaction, so we might fail to detect it. We need to get to modeling to find out....
+
+##Interaction evidence sentence
+There is some evidence against the null hypothesis of no interaction between land cover and aspect on the slow density (F_3,778.63 = 2.7, p-value = 0.043), controlled for strata as a random effect, so we would conclude that there is evidence of an interaction between land cover and aspect on snow density and keep the interaction in the model. (Lab 8)
+
+##Mixed model vs interaction model etc
+The interaction model shows strong evidence agains the null which differs from the mixed model. The linear model does not account for the variability that comes from the strata. The mixed model treats the strata as a random effect, which adjusts for the variability that comes from different strata. (Lab 8) 
+
+##Size interpretation
+For two otherwise similar sites that are both nonforested but that differ in Aspect, the estimated mean density for the North aspect site is 30.5${kg}/{m^3}$ lower than the east site (95% CI: -43 to -18). 
+
+##Tukey
+Tukey adjusts for multiple comparisons! So the confidence interval is wider. 
+
+##Size interpretation 
+For two otherwise similar sites but that differ on Aspect, the estimated mean density for a west site is 12.662 higher that for a north site (95% Tukey's adjusted CI of -1.41 to 26.74), controlled for land cover, radiation, and elevation. 
+
+```{r}
+data(snowdepths)
+snowdepths <- snowdepths %>%
+  mutate(AspectCat = factor(case_when(
+    aspect %in% (0:45)~ "North",
+    aspect %in% (315:360)~ "North",
+    aspect %in% 45:(90+45) ~ "East",
+    aspect %in% (90+45):(180+45) ~ "South",
+    aspect %in% (180+45):315 ~ "West"
+  )),
+  SnowPresence = factor(case_when(
+    snow == 0 ~ "None",
+    snow > 0 ~ "Some"
+  )),
+  Landf = factor(cover),
+  Landf = fct_recode(Landf,
+                     "Not Forested" = "0",
+                     "Forested" = "10")
+  )
+```
+
+##Moths
+**HW 3,4,6,7**
+
+#Size interp
+For two otherwise similar moths but that had observed times that differed in humidity by 1 percent, the one measured during higher humidity had a higher estimated mean lot-latency time by 0.16 log-seconds than the less humid observation for an observation with a cold-phosphorous light (95% CI of ... to ...)
+
+If it wasnt for a specific treatment comparison then we would say, controlled for treatment. (HW 3)
+
+#Anova interaction evidence sentence
+There is weak evidence against the null of no interaction between humidity and treatment on the log-latency (f and p), so we would conclude that there is not an interaction between them and drop the term from the model. 
+
+#t-test interaction evidence
+There is some evidence against the null.., etc
+
+#Why do they differ
+The t-test and p value are conducted while holding all other components constant. The type 1 f test (anova) are conditional on everything higher up in the model, so humidity is not conditioned on anything else in the model. A type 2 test (Anova) because it runs with that component last so it is conditioned on all other variables. 
+
+#light tailed and heavy tailed distributions
+
+#df = indicators, intercept, etc, variance of errors
+
+#delta AIC value threshold of 4! 
+
+#evidence sentence for top BIC model
+The top model is the mean-only model (along with random effects) and it is 2.2 BIC units better than the model with temperature added, suggesting strong evidence for the top model. But since the model is "doing nothing" in terms of the fixed effects, the results suggest that there are no useful predictors or there is strong support for not including any predictors once we account for the repeated measures on types of moths, at least based on the BIC way of making comparisons
+
+#Anova F-test
+There is moderate [weak] evidence against the null hypothesis of no interaction between colour and spectra on the log-latency time (f and p) so we would conclude there is [not] an interaction and keep it [drop it] from the model. 
+
+#For an interaction you need variation in both variables across ALL levels !! 
+
+
+```{r}
+library(readxl)
+moth <- read_excel("moths.xlsx", 
+     sheet = "complete_dataset_MAIN FAMILIES.", 
+    na = "NA")
+
+library(lubridate)
+moth <- moth %>% 
+  mutate(Date = factor(ymd(Date))) %>% 
+  dplyr::select(-Sunset_time)
+
+dat <- moth %>% drop_na(Date, ID, Location, Treatment, Treatment_y_n, Colour, Spectra, Moon_Phase, Temp, Wind_speed_ms, Humidity, Common_name, Latin_name, Family, Sub_family, Latency, Erratic_behaviour)
+
+dat <- dat %>% mutate(Treatment = factor(Treatment),
+                      Treatment = fct_recode(Treatment,
+                                             "Cool Phosphor-coated" = "1",
+                                             "Warm Phosphor-coated" = "2",
+                                             "Cool RGB" = "3",
+                                             "Warm RGB" = "4"),
+                      log_Latency = log(Latency))
+```
+
+##Sit_and_brain
+**HW 1,2**
+
+#R-squared
+The r-squared value of 0.005345 suggests that 0.53% of the variation in METminwk is explained by the linear relationship with time sitting. This is very small and shows weak evidence of a linear relationship between sedentary behavior and physical activity. 
+
+#Evidence sentence
+There is strong evidence against the null of no linear relationship between sitting and total brain size (T33 = -2.5, p-value = 0.018), so we would conclude that there is a relationship between them and keep sitting time as a predictor for total brain size
+
+#Size interpretation 
+For two otherwise similar subjects but that differ by 1 hour of sitting, the estimated brain size is -0.23mm different for the longer sitting one than for the shorter sitting one (95% CI of -0.042 to -0.0004) 
+
+##Bonferroni's
+1-(0.95*n) ... The probability of there being at least one Type I error in their Table 2 is all the tests were independent of each other and all null hypotheses were true and they used a 0.05 cutoff for each test is 0.5599. 
+
+
+```{r}
+library(catstats2)
+data(sit_and_brain)
+```
+
+

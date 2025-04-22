@@ -1,0 +1,184 @@
+---
+title: "Lab 4"
+output:
+  word_document:
+    fig_height: 5
+    fig_width: 8
+date: ""
+author: "Names"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+options(show.signif.stars = FALSE)
+
+library(ggplot2)
+library(ggthemes)
+library(tidyverse)
+library(car)
+library(effects)
+library(readxl)
+library(mosaic)
+library(catstats2)
+library(ggResidpanel)
+library(easyalluvial)
+library(emmeans)
+library(patchwork)
+library(plotly)
+library(modelsummary)
+library(ggmosaic)
+library(gtsummary)
+theme_set(theme_bw()) #Prevents need for + theme_bw() in ggplots
+```
+
+
+# Rules
+
+In groups of 2 to 4 from the last lab session, complete the following.
+
+
+# Code/work from Lab 3:
+
+```{r}
+data(TendonData)
+tendon <- TendonData
+
+ tendonN <- tendon %>%
+      rename(SubjectID = 'Subject ID',
+             Sex = 'Sex  (M=1)',
+             CurrPain = 'CurrPain (Y=1)',
+             WaisttoHip = 'Waist to Hip',
+             VISAA = 'VISA-A',
+             Neovascularization = 'Neovascularization (Doppler) (Y=1)',
+             HistPain = 'Hx Pain (Y=1)')
+ 
+ tendonF <- tendonN %>% 
+      mutate(across(where(~ is.character(.x)), as.factor))
+ 
+ 
+ tendonF <- tendonF %>%
+      mutate(CurrPain = factor(CurrPain),
+             HistPain = factor(HistPain),
+             Neovascularization = factor(Neovascularization),
+             Sex = factor(Sex),
+             Sex = fct_recode(Sex,
+                   "Female" = "0",
+                   "Male" = "1"),
+             Location = factor(substr(SubjectID, 1, 3)),
+             PainCombs =  as.numeric(str_c(HistPain, CurrPain))
+             )
+tendonna1 <- tendonF %>% drop_na(CSA)
+tendonna2 <- tendonF %>% drop_na()
+
+```
+
+
+```{r}
+
+#Names may differ from your version of Lab 3 - can edit these or use our version:
+tendonna2 <- tendonna2 %>% mutate(PainCombs2 = factor(PainCombs),
+                                PainCombs2 = fct_recode(PainCombs2,
+                                              "NoPain" = "0", # 00 
+                                              "CurrPainOnly" = "1", # 01  
+                                              "HistPainOnly" = "10",
+                                              "Both" = "11"))
+levels(tendonna2$PainCombs2)
+
+enhanced_stripchart(PSFR ~ PainCombs2, data = tendonna2)
+```
+
+```{r}
+lm_PC2 <- lm(PSFR ~ PainCombs2, data = tendonna2)
+summary(lm_PC2)
+plot(allEffects(lm_PC2))
+
+```
+
+Q1 (Lab 3 number 6): Use `favstats` to obtain the estimated means for PSFR for each of the levels of the new `PainCombs` variable. No discussion.
+
+```{r}
+favstats(PSFR ~ PainCombs2, data = tendonna2)
+```
+
+Q2 (Lab 3 number 7): Generate an estimated mean from the previously estimated linear model for subjects with neither history of pain nor current pain. Show your work or explain how you found the result. Make sure you check your work versus the results from `favstats` in the previous question.
+
+The estimated mean for subjects with neither history of pain nor current pain would be 1.96 as the indicator variables for the other beta coefficients would be set to 0, leaving just the baseline statistic. 
+
+
+Q3 (Lab 3 number 8): Generate an estimated mean from the model for subjects with current pain but no history of pain. Show your work.
+
+Estimated mean from the model for subjects with current pain but no history of pain is 1.89.
+
+```{r}
+1.96 - 0.07201
+```
+
+
+## Heel Raise as a response variable
+
+Q4 (Lab 3 number 9): Make an enhanced stripchart of the `HeelRaise` variable based on the `Location` (university where the measurements were made) variable. No discussion and you do not need to modify the axes or title.
+
+```{r}
+enhanced_stripchart(HeelRaise ~ Location, data = tendonna2)
+```
+
+
+Q5 (Lab 3 number 10): From their reference number 29, I found "The number of standing unilateral heel-raises above a level 5 cm from the floor was counted. The starting side for the test was the same as in the isokinetic tests. Each test was performed on both sides, followed by a 4 min rest... The leg that was being tested had to be kept straight. The test was stopped when the subject was unable to continue performing proper heel-raises due to fatigue." Assuming that the testing protocol was the same in this study, what are the units of the measurements in `HeelRaise`? What is the smallest and largest observed value in the data set?
+
+
+* The smallest measurement recorded was 2.0 heel raise repetitions and the largest was 48.0 heel raise repetitions.
+
+```{r}
+summary(tendonna2$HeelRaise)
+```
+
+
+# Part II: Model for heel raises:
+
+
+Q6) Fit an appropriate GLM for heal raises based on Age and Location and their interaction. Generate a model `summary` and effects plots on the link and response scales with improved y-axis labels (see the lecture notes).
+
+* Notes: (i) The provided code changes the baseline level of the Location variable, use the modified version. (ii) If your two effects plots look the same, you should check whether you actually fit a Poisson GLM and not a Gaussian glm.
+
+
+```{r}
+tendonna2 <- tendonna2 %>% mutate(Location = relevel(Location, "USC"))
+
+glm1 <- glm(HeelRaise ~ Age*Location, tendonna2, family = poisson)
+summary(glm1)
+
+plot(allEffects(glm1, residuals = T), type = "link", grid = T, ylab = "Estimated log-mean Heel Raise Count")
+plot(allEffects(glm1, residuals = T), type = "response", grid = T, ylab = "Estimated mean Heel Raise Count")
+
+```
+
+
+Q7) Write out the estimated model, defining any indicator variable(s) you use.
+
+* Heel Raise $\sim$ Poisson($\hat{\mu}$) #defines random component in model
+
+* $log(\hat{\mu}\{ HeelRaise | Age * Location\}) = 2.599 + 0.0084Age + 0.303I_{Location=UNL} - 0.0112Age*I_{Location=UNL}$
+
+* where $I_{Location=UNL}$ is 1 when location is UNL and 0 if USC 
+
+
+
+Q8) Simplify the estimated model for the log-mean on the link scale for a USC subject.
+
+* $log(\hat{\mu}\{ HeelRaise | Age * Location\}) = 2.599 + 0.0084Age$
+
+
+Q9) Interpret the Age predictor "size" on the response (mean count) scale. You can use `modelname %>% tbl_regression(intercept = T, exponentiate = T)` to get the numbers for the interpretation and related 95% CI (no exponentiation needed since it does that for you).
+
+  **For two otherwise similar subjects, but that differ by 1 year in age, we estimate that the mean number of heel raises until failure will change by 1.01 times that of the younger individual at USC (95% CI: exp(1.00) to exp(1.01)).**
+
+```{r}
+glm1 %>% tbl_regression(intercept = T, exponentiate = T)
+```
+
+
+Q10) Cite any external resources used. If none, report that.
+
+  * NONE
+  

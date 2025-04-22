@@ -1,0 +1,193 @@
+---
+title: "Lab 7"
+output:
+  word_document:
+    fig_height: 5
+    fig_width: 8
+date: ""
+author: "DO NOT INCLUDE NAMES - Just add names in gradescope"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+options(show.signif.stars = FALSE)
+
+library(ggplot2)
+library(ggthemes)
+library(tidyverse)
+library(car)
+library(effects)
+library(readxl)
+library(mosaic)
+library(catstats2)
+library(ggResidpanel)
+library(easyalluvial)
+library(emmeans)
+library(patchwork)
+library(plotly)
+library(modelsummary)
+library(ggmosaic)
+library(ggrepel)
+library(cetcolor)
+library(MuMIn)
+theme_set(theme_bw()) #Prevents need for + theme_bw() in ggplots
+```
+
+
+# Rules
+
+In groups of 2 or 3, complete the following.
+
+# Modeling Snow Density
+
+We will be using the data set from Wetlaufer, Hendrikx, and Marshall (2016) - study where they explored the relationship between snow density ($kg/m^3$) or snow depth (`snow`, mm) or snow water equivalent (SWE, mm) with a suite of predictor variables. In this lab we will condition on there being snow present and then try to model snow density with models that will compete with what they discuss in Tables 3 and 4. We will be interested in using `elev` (Elevation, m), `Land` (forest cover with 0 = unforested and 10 = forested), `rad` (Potential Solar radiation, $Wh/m^2$),  `curvature` (see https://blogs.esri.com/esri/arcgis/2010/10/27/understanding-curvature-rasters/ for a description), `aspect` (orientation of slope in degrees (0 to 360 degrees)), and `angle` (angle of slope in degrees with 0 being flat) as predictors. Also pay attention to the `strata` variable (read its definition in the paper) and the role that played in the data collection and should in the analysis, as we will revisit this.
+
+* Wetlaufer, K., Hendrikx, J., and L. Marshall (2016) Spatial Heterogeneity of Snow Density and Its Influence on Snow Water Equivalence Estimates in a Large Mountainous Basin. _Hydrology_, 3(1):3, doi:10.3390/hydrology3010003. Available at http://www.mdpi.com/2306-5338/3/1/3/htm  and on D2L
+
+
+Run the following code to get re-started with the data set.
+
+```{r fig.width=8, fig.height=4}
+data(snowdepths)
+snowdepths <- snowdepths %>%
+  mutate(AspectCat = factor(case_when(
+    aspect %in% (0:45)~ "North",
+    aspect %in% (315:360)~ "North",
+    aspect %in% 45:(90+45) ~ "East",
+    aspect %in% (90+45):(180+45) ~ "South",
+    aspect %in% (180+45):315 ~ "West"
+  )),
+  SnowPresence = factor(case_when(
+    snow == 0 ~ "None",
+    snow > 0 ~ "Some"
+  )),
+  Landf = factor(cover),
+  Landf = fct_recode(Landf,
+                     "Not Forested" = "0",
+                     "Forested" = "10")
+  )
+
+snowdepthsR <- snowdepths %>% drop_na(density)
+lmA <- lm(density ~ rad + snow + elev + AspectCat, data = snowdepthsR)
+```
+
+
+**Q1 (Lab 5 Q6) We should assess model assumptions before we report any inferences from a model. Discuss the potential for a violation of the independence assumption in the previous model for snow density based on the design of the study and data collection. Hint: review the paper (Sections 2 and 3) for how they decided on their sampling locations.**
+
+Based on their sampling and study design there are possible violations against the independence assumption. Sampling was conducted in a few distinct areas of West Fork Basin that were selected for their characteristics of different terrain types and defined as physiographic strata. Within these areas, sampling points were randomly selected at distances ranging from 30 to 400m. At each of these sampling points, three samples were taken 10m apart in triangular fashion.  This cluster sampling may introduce violations to the assumption of independence as these points may show similar values and not be independent of each other. 
+
+**Q2 (Lab 5 Q7) Run the following code on your model to generate a calibration set of plots for the residuals for assessing the normality of residuals assumption. (a) Which column contained the real residuals? (b) How easy was it to identify the real residuals versus versions of the residuals simulated from normal distributions (all the others)? (c) Use how clear it was to identify the real residuals from the simulated ones to discuss the strength of evidence against the normality of residuals assumption. Make sure you discuss the shape of the residual distribution if you think it doesn't follow a normal distribution.**
+
+The real residuals are seen in column 2. It was somewhat easy to identify the real residuals since they display a heavy-tailed distribution that is not present in the other 4 simulations. Based on this difference we would say that there is strong evidence against the assumption of normality. 
+
+```{r}
+set.seed(123)
+resid_calibrate(lmA, nsim = 4, c("qq","hist"), identify = T, shuffle = T, coordfix = F)
+```
+
+
+
+**Q3 (Lab 5 Q8) There is no clear issue with linearity in the residuals vs fitted (more later on that with partial residuals). So we are safe to consider the residuals vs fitted and location-scale plots for assessing the equal variance of residuals assumption. Use the following `resid_calibrate` code on your model to explore the equal variance assumption. Write a sentence or two to discuss the strength of evidence against the assumption of equal variance based on these results. When it is safe to consider, you should always discuss the Location-Scale plot along with the Residuals vs Fitted when assessing HOV.**
+
+We would say that there is little evidence against the assumption of equal variance as the residuals vs fitted and location-scale plots are difficult to identify from the simulated normal distributions. As the predicted values increase, the spread of the residuals seem to remain somewhat the same. 
+
+```{r}
+set.seed(12345)
+resid_calibrate(lmA, c("resid", "ls"), nsim = 4, identify = T, shuffle = T)
+
+```
+
+**Q4 (Lab 5 Q9) Two more predictors are added to the model (`cover` (whether location had trees or not) and `swe` (snow water equivalent)). Check for issues with multi-collinearity in `lmA` using the `vif` function (from `car`) and the `check_collinearity` function (from `performance`). Which two variables are most impacted by multi-collinearity in `lmB`? How can you explain that?**
+
+Snow Water Equivalent (SWE) and Snow Depth variables are most impacted by multi-collinearity. SWE measures the amount of water contained in the snowpack by representing the depth of water that would result if the snow were melted. It makes sense that this variable is highly correlated with snow depth as depth is used to calculate swe. 
+
+```{r}
+ggcorrplot(snowdepthsR %>% dplyr::select(density, rad, snow, elev, swe) %>% cor(), lab = T)
+
+lmB <- lm(density ~ rad + snow + elev + AspectCat + cover + swe, data = snowdepthsR)
+vif(lmB)
+library(performance)
+check_collinearity(lmB)
+```
+
+
+**Q5 (Lab 5 Q10) How can you explain the following change in slope coefficients for `snow` and `swe` across the following three models?**
+
+In the models with only snow depth or swe as the only predictor variables, slope coefficients were -0.044(depth) and -0.052(swe). These negative slope values suggest that as snow depth or swe increased, density decreased based on one predictor. 
+
+In the additive model, slope coefficient for depth was -0.285614 and 0.767854 for swe. The negative coefficient for snow is now larger because it reflects the independent relationship of snow with density, after removing the influence of SWE. SWE now seems to have a positive relationship with density in the presence of snow. This is due to multicollinearity and their shared variance. 
+
+```{r}
+lmDepth <- lm(density ~ snow, data = snowdepthsR)
+summary(lmDepth)
+plot(allEffects(lmDepth), grid = T)
+lmSWE <- lm(density ~ swe, data = snowdepthsR)
+summary(lmSWE)
+plot(allEffects(lmSWE), grid = T)
+
+lmC <- lm(density ~ snow + swe, data = snowdepthsR)
+summary(lmC)
+plot(allEffects(lmC), grid = T)
+```
+
+
+
+**Q6) The authors note six different models they considered in Tables 3 and 4. Fit those models and use `model.sel` to compare them on AIC, also including an additive model that contains elevation (`elev`), radiation (`rad`), snow depth (`snow`), slope (`angle`), and our `AspectCat` variable, as well as a mean-only model. Report what is in the top AIC model from this suite of eight models.**
+
+The top AIC model is the additive model containing elevation (`elev`), radiation (`rad`), snow depth (`snow`), slope (`angle`), and our `AspectCat` variable. 
+
+```{r}
+lmElev <- lm(density ~ elev, data = snowdepthsR)
+
+lmmeanonly <- lm(density ~ 1, data = snowdepthsR)
+
+lmRad <- lm(density ~ rad, data = snowdepthsR)
+
+lmSnoDep <- lm(density ~ snow, data = snowdepthsR)
+
+lmSlopeAngle <- lm(density ~ angle, data = snowdepthsR) 
+
+lmElevRad <- lm(density ~ elev + rad, data = snowdepthsR)
+
+lmSDRad <- lm(density ~ snow + rad, data = snowdepthsR)
+
+lmADD <- (lm(density ~ elev + rad + snow + angle + AspectCat,
+             data = snowdepthsR))
+
+d1 <- model.sel(list(lmElev, lmmeanonly, lmRad, lmSnoDep,
+                     lmSlopeAngle, lmElevRad, lmSDRad, lmADD),
+                rank = "AIC")
+d1
+ggdredgeplot(d1) ##this is in catstats2 
+##ggdredgeplotly(d1) #interactive!! 
+##nice to share as html with people so interactive ones work :)
+```
+
+**Q7) Take the "full" model from the previous question and run `dredge`  on it, generating results ranked based on the AIC. Make a plot of the results using `ggdredgeplot`. How many models were considered? What was in the top AIC model? How many models were within 2 AIC units of the top model?**
+
+32 models were considered! There were four models within 2 AIC units of the top model. The top AIC model was density ~ elev + rad + snow. 
+
+```{r}
+options(na.action = "na.fail") #need to run this before dredge ! 
+res_AIC <- dredge(lmADD, rank = "AIC")
+dim(res_AIC) #the rows = number of models explored
+
+ggdredgeplot(res_AIC)
+##ggdredgeplotly(res_AIC)
+
+AIC_2 <- subset(res_AIC, delta < 2)
+AIC_2
+
+ggdredgeplot(res_AIC, deltasubset = 2)
+
+topAICmodel <- eval(attributes(res_AIC)$model.calls$`29`)
+topAICmodel$coefficients
+
+topAICmodel
+```
+
+
+**Q8) Report any resources outside your group and the course provided materials that you used and how they impacted your answers.**
+
+NONE
